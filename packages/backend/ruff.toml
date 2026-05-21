@@ -1,0 +1,24 @@
+# ruff 配置 ── 快速 Python 代码检查与格式化
+target-version = "py311"
+
+line-length = 100
+
+[lint]
+select = [
+  "E",   # pycodestyle 错误
+  "W",   # pycodestyle 警告
+  "F",   # PyFlakes
+  "I",   # isort
+  "B",   # flake8-bugbear
+  "C4",  # flake8-comprehensions
+  "SIM", # flake8-simplify
+  "N",   # pep8-naming
+]
+
+ignore = [
+  "E501",  # 行长度由 formatter 处理
+]
+
+[format]
+quote-style = "double"
+indent-style = "space"

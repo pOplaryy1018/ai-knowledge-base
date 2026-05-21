@@ -1,0 +1,59 @@
+/* 全局样式重置与设计令牌 */
+:root {
+  /* 主色调 */
+  --akb-primary: #409eff;
+  --akb-success: #67c23a;
+  --akb-warning: #e6a23c;
+  --akb-danger: #f56c6c;
+
+  /* 背景与文字 */
+  --akb-bg: #f5f7fa;
+  --akb-text: #303133;
+  --akb-text-secondary: #606266;
+
+  /* 圆角 */
+  --akb-card-radius: 8px;
+  --akb-btn-radius: 4px;
+
+  /* 侧边栏 */
+  --akb-sidebar-bg: #304156;
+  --akb-sidebar-text: #bfcbd9;
+  --akb-sidebar-active: #409eff;
+
+  /* 顶栏 */
+  --akb-header-height: 60px;
+  --akb-header-bg: #ffffff;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, 'Noto Sans SC', sans-serif;
+  color: var(--akb-text);
+  background-color: var(--akb-bg);
+}
+
+/* 统一卡片样式 */
+.el-card {
+  border-radius: var(--akb-card-radius) !important;
+}
+
+/* 统一按钮圆角 */
+.el-button {
+  border-radius: var(--akb-btn-radius);
+}
+
+/* 内容区表格页通用间距 */
+.page-container {
+  background: #fff;
+  border-radius: var(--akb-card-radius);
+  padding: 20px;
+}

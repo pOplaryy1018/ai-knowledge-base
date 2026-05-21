@@ -1,0 +1,58 @@
+:root {
+  /* ── 主色系 ── */
+  --color-primary: #122E8A;
+  --color-primary-hover: #0F2570;
+  --color-primary-light: #E8ECF4;
+
+  /* ── 背景色系 ── */
+  --color-bg: #F5EFEA;
+  --color-bg-card: #FFFFFF;
+  --color-bg-card-alt: #FAF7F4;
+
+  /* ── 文字色系 ── */
+  --color-text-primary: #1D2129;
+  --color-text-secondary: #4E5969;
+  --color-text-tertiary: #7A7068;
+  --color-text-inverse: #FFFFFF;
+
+  /* ── 边框与阴影 ── */
+  --border-color: #E5E0DB;
+  --shadow-card: 0 1px 3px rgba(18, 46, 138, 0.06);
+  --shadow-card-hover: 0 8px 25px rgba(18, 46, 138, 0.12);
+
+  /* ── 状态色 ── */
+  --color-success: #2BA471;
+  --color-warning: #D97706;
+  --color-danger: #D92D20;
+
+  /* ── 桥接旧变量 ── */
+  --akb-primary: var(--color-primary);
+  --akb-bg: var(--color-bg);
+  --akb-text: var(--color-text-primary);
+  --akb-text-secondary: var(--color-text-secondary);
+  --akb-card-radius: 8px;
+  --akb-btn-radius: 4px;
+
+  /* ── Arco Design 变量覆盖 ── */
+  --color-primary-6: var(--color-primary);
+  --color-primary-5: #1A3DAA;
+  --color-primary-7: #0F2570;
+  --color-neutral-1: var(--color-bg);
+  --color-neutral-2: var(--color-bg-card-alt);
+  --color-neutral-3: var(--border-color);
+}
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans SC', sans-serif;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg);
+}

@@ -1,0 +1,58 @@
+# ── Web 框架 ──
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+
+# ── 数据库 ──
+sqlalchemy[asyncio]>=2.0.36
+asyncpg>=0.30.0
+alembic>=1.14.0
+
+# ── 数据校验 ──
+pydantic>=2.10.0
+pydantic-settings>=2.7.0
+
+# ── 缓存 ──
+redis>=5.2.0
+
+# ── 环境变量 ──
+python-dotenv>=1.0.1
+
+# ── 认证与安全 ──
+email-validator>=2.3.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+bcrypt==4.0.1
+
+# ── 文档解析 ──
+pdfplumber>=0.11.0
+python-docx>=1.1.0
+markdown>=3.7.0
+
+# ── 图片 OCR ──
+pytesseract>=0.3.10
+Pillow>=10.0.0
+
+# ── 文本切分与向量化 ──
+langchain-text-splitters>=0.3.0
+sentence-transformers>=3.3.0
+
+# ── 向量存储 ──
+pgvector>=0.4.0
+
+# ── SSE 服务端推送 ──
+sse-starlette>=3.4.0
+
+# ── 异步任务队列 ──
+arq>=0.28.0
+
+# ── 文件上传 ──
+python-multipart>=0.0.20
+
+# ── LLM 调用 ──
+openai>=1.58.0
+
+# ── 中文分词 ──
+jieba>=0.42.1
+
+# ── 工具 ──
+httpx>=0.28.0

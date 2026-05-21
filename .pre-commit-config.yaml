@@ -1,0 +1,42 @@
+# pre-commit 钩子配置 ── 提交前自动检查代码质量
+repos:
+  # ── 通用检查 ──
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+
+  # ── 前端：Prettier 格式化 ──
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        files: \.(vue|ts|js|css|json|yaml)$
+        additional_dependencies:
+          - prettier@3.4.2
+
+  # ── 后端：ruff 检查与格式化 ──
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.0
+    hooks:
+      - id: ruff
+        args: [--fix, --config, packages/backend/ruff.toml]
+      - id: ruff-format
+        args: [--config, packages/backend/ruff.toml]
+
+  # ── 后端：mypy 类型检查 ──
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.15.0
+    hooks:
+      - id: mypy
+        args: [--config-file, packages/backend/mypy.ini]
+        additional_dependencies:
+          - pydantic>=2.10.0
+          - pydantic-settings>=2.7.0
+          - fastapi>=0.115.0
+          - sqlalchemy>=2.0.36

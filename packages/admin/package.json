@@ -1,0 +1,32 @@
+{
+  "name": "@akb/admin",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext .vue,.ts --fix"
+  },
+  "dependencies": {
+    "@akb/shared": "workspace:*",
+    "@arco-design/web-vue": "^2.58.0",
+    "@tanstack/vue-query": "^5.100.13",
+    "@types/markdown-it": "^14.1.2",
+    "axios": "^1.7.9",
+    "echarts": "^6.1.0",
+    "highlight.js": "^11.11.1",
+    "markdown-it": "^14.1.1",
+    "pinia": "^2.3.0",
+    "vue": "^3.5.13",
+    "vue-echarts": "^8.0.1",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.5",
+    "vue-tsc": "^2.2.0"
+  }
+}

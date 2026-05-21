@@ -1,0 +1,30 @@
+{
+  "name": "ai-knowledge-base",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:admin": "pnpm --filter @akb/admin dev",
+    "dev:consumer": "pnpm --filter @akb/consumer dev",
+    "dev:backend": "cd packages/backend && .venv\\Scripts\\uvicorn app.main:app --reload",
+    "build:admin": "pnpm --filter @akb/admin build",
+    "build:consumer": "pnpm --filter @akb/consumer build",
+    "lint": "pnpm -r lint",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@vue/eslint-config-typescript": "^14.7.0",
+    "eslint": "^10.4.0",
+    "eslint-plugin-vue": "^10.9.1",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.59.4"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

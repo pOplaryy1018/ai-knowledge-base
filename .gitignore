@@ -1,0 +1,62 @@
+# ── 依赖目录 ──
+node_modules/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ── 文档（内部开发资料，不对外公开）──
+docs/
+
+# ── 构建产物 ──
+dist/
+build/
+*.tsbuildinfo
+
+# ── 环境变量 ──
+.env
+.env.local
+.env.*.local
+
+# ── IDE ──
+.vscode/
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# ── 操作系统 ──
+.DS_Store
+Thumbs.db
+
+# ── Docker ──
+pgdata/
+
+# ── 截图产物 ──
+**/screenshots/*.png
+**/screenshots/*.jpg
+
+# ── 上传 / 临时文件 ──
+uploads/
+temp/
+
+# ── 日志 ──
+*.log
+logs/
+
+# ── 测试 ──
+.coverage
+htmlcov/
+.pytest_cache/
+coverage/
+
+# ── 数据库文件 ──
+*.db
+*.sqlite3
+
+# ── 工具缓存 ──
+.mypy_cache/
+.ruff_cache/
+.eslintcache
