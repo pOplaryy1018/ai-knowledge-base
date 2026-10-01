@@ -30,6 +30,28 @@ python -m mypy app
 
 迁移只在测试库演练过 upgrade、downgrade、再 upgrade 和备份恢复。现有业务库上线需先备份，在副本验证迁移与记录数，再安排正式迁移。
 
+## 第二阶段：仓库接入
+
+资料来源可选择本地仓库或公开 GitHub 仓库，手动同步固定 HEAD commit，仅采集已提交 UTF-8 文本。未提交内容不会入库；每次同步的 dirty 观察独立记录，即使 commit 未变也会提示。范围可以修改，修改后需手动同步；相同 commit 不同处理范围产生独立版本。
+
+本地授权默认关闭。在后端 `.env` 中配置 JSON 数组（路径和 UUID 按实际部署填写）：
+
+```dotenv
+SOURCE_REPO_ROOTS=[{"id":"personal","label":"个人代码目录","path":"/repo-roots/personal","user_ids":["USER_UUID"]}]
+SOURCE_GIT_EXECUTABLE=git
+SOURCE_REPO_CACHE_DIR=./uploads/git-cache
+```
+
+Windows 原生部署将 path 换为实际绝对路径，如 `E:/code`。Docker 部署必须为 backend 和 worker 分别增加相同只读挂载，例如 `E:/code:/repo-roots/personal:ro`，并共享相同用户授权配置；不要把盘符路径直接传入容器。前端只显示 label 和根目录内相对路径，不显示服务端根路径。Git 已加入 Dockerfile，但更新镜像需要重新构建。
+
+本地路径、`.git` symlink/junction、对象 alternates、配置 include、linked worktree 和配置了 filters 的仓库会被拒绝；不执行项目代码或安装依赖。公開来源限 HTTPS GitHub 公共仓库，禁用凭据继承、hooks、filter、重定向和子模块。
+
+候选文件默认5000、单文件1MiB、总文本50MiB、超时180秒。公开 fetch 另监测100MiB临时存储预算；50ms检查间隔可能短时超出预算，超限不会发布。超限可调整范围后重试。ZIP 下载只包含实际采集文件，不是完整 Git 仓库备份，commit/范围/跳过清单在版本信息中查看。
+
+来源内容版本与发布记录分离，A→B→A保留三次发布及独立复核事件。存在重复发布后，降级到第一阶段的迁移会明确拒绝，避免丢失发布历史；应恢复备份或制定专门迁移方案。
+
+第二阶段验证包含真实 GitHub 首次采集、本地真实仓库更新/回退/删除、真实 HTTP 凭据隔离、SHA-1/SHA-256、数据库与浏览器。公共来源更新采用受控连接器快照测试，不修改第三方仓库。真实 LLM 两个小样例通过，embedding 仍用替身验证编排，不代表真实检索质量验收。
+
 ## 已知非阻塞项
 
 前端 lint 有既有 28 个 warning，构建仍有大 chunk 提示；后端 jieba 有 pkg_resources 弃用 warning。来源任务失败提示目前为通用提示，原已发布版本保留。Docker 镜像下载经过本地代理可能间歇 EOF/reset。
