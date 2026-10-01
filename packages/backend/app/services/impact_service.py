@@ -25,12 +25,13 @@ async def inspect_evidence(session: AsyncSession, evidence: AnswerEvidence, user
     # Missing path may be a moved page/paragraph; global exact matching is conservative.
     documents = [LocatedText(row.logical_path, row.text, row.locator) for row in matching or rows]
     match = match_evidence(evidence.quote, documents, evidence.locator)
+    state = "missing" if path and not matching and match.state == "changed" else match.state
     current_text = match.current_text
     if current_text is None and matching:
         start = evidence.locator.get("char_start", 0)
         offset = start if isinstance(start, int) else 0
         current_text = matching[0].text[offset:offset + len(evidence.quote)]
-    return {**result, "state": match.state, "locator": match.locator,
+    return {**result, "state": state, "locator": match.locator,
             "current_text": current_text, "current_revision_id": source.current_revision_id}
 
 

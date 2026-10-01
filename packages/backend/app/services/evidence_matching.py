@@ -59,6 +59,6 @@ def match_evidence(
     locator = matches[0]
     # Compare the supplied position fields; old locators may omit descriptive metadata.
     same_position = original_locator is None or all(
-        locator.get(key) == value for key, value in original_locator.items()
+        locator.get(key) == value for key, value in original_locator.items() if key != "commit"
     )
     return EvidenceMatch("unchanged" if same_position else "relocated", locator, quote)

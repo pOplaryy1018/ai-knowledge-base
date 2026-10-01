@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,8 +16,9 @@ from app.core.security import get_current_user
 from app.models.knowledge import KnowledgeBase
 from app.models.source import Source, SourceRevision, SourceSyncTask
 from app.models.user import User
-from app.schemas.source import SourceCreate
+from app.schemas.source import SourceCreate, SourceScopeUpdate
 from app.services.file_storage import UPLOAD_ROOT, remove_uploads
+from app.services.repo_access import authorized_roots, source_config
 
 router = APIRouter(tags=["资料来源"])
 SOURCE_ROOT = UPLOAD_ROOT / "sources"
@@ -37,19 +38,69 @@ async def owned_source(session: AsyncSession, source_id: str, user_id: str, *, l
 def source_payload(source: Source) -> dict[str, Any]:
     return {"id": source.id, "knowledge_base_id": source.knowledge_base_id, "name": source.name,
             "kind": source.kind, "current_revision_id": source.current_revision_id,
-            "active_task_id": source.active_task_id, "archived_at": source.archived_at}
+            "active_task_id": source.active_task_id, "archived_at": source.archived_at,
+            "config": source.config, "last_sync_manifest": source.last_sync_manifest}
 
 
 @router.post("/sources", status_code=201)
 async def create_source(body: SourceCreate, user: User = Depends(get_current_user)) -> dict[str, Any]:
+    try:
+        config = source_config(body.kind, body.config, user.id)
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
     async with async_session() as session:
         await session.execute(select(User).where(User.id == user.id).with_for_update(read=True, key_share=True))
         kb = (await session.execute(select(KnowledgeBase).where(KnowledgeBase.id == str(body.knowledge_base_id),
                                     KnowledgeBase.user_id == user.id).with_for_update())).scalar_one_or_none()
         if kb is None:
             raise HTTPException(404, "知识库不存在")
-        source = Source(user_id=user.id, knowledge_base_id=kb.id, name=body.name, kind=body.kind)
+        source = Source(user_id=user.id, knowledge_base_id=kb.id, name=body.name, kind=body.kind, config=config)
         session.add(source)
+        await session.commit()
+        return source_payload(source)
+
+
+@router.get("/source-repo-roots")
+async def repo_roots(user: User = Depends(get_current_user)) -> dict[str, Any]:
+    return {"items": [{"id": root["id"], "label": root.get("label", root["id"])} for root in authorized_roots(user.id)]}
+
+
+@router.post("/sources/{source_id}/sync", status_code=202)
+async def sync_repository(source_id: uuid.UUID, user: User = Depends(get_current_user)) -> dict[str, Any]:
+    async with async_session() as session:
+        await session.execute(select(User).where(User.id == user.id).with_for_update(read=True, key_share=True))
+        source = await owned_source(session, str(source_id), user.id, lock=True)
+        if source.kind not in {"git_local", "git_public"}:
+            raise HTTPException(422, "文档来源请上传新版文件")
+        try:
+            source_config(source.kind, source.config, user.id)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+        if source.archived_at or source.active_task_id:
+            raise HTTPException(409, "来源已归档或已有同步任务")
+        task = SourceSyncTask(source_id=source.id, user_id=user.id)
+        session.add(task)
+        await session.flush()
+        source.active_task_id = task.id
+        await session.commit()
+    try:
+        from app.api.import_api import get_arq
+        await (await get_arq()).enqueue_job("process_source_import", task.id, _job_id=f"source:{task.id}")
+    except Exception:
+        pass
+    return {"source_id": str(source_id), "revision_id": None, "task_id": task.id, "status": task.status}
+
+
+@router.patch("/sources/{source_id}/scope")
+async def update_repo_scope(source_id: uuid.UUID, body: SourceScopeUpdate, user: User = Depends(get_current_user)) -> dict[str, Any]:
+    async with async_session() as session:
+        source = await owned_source(session, str(source_id), user.id, lock=True)
+        if source.kind not in {"git_local", "git_public"} or source.archived_at or source.active_task_id:
+            raise HTTPException(409, "来源当前不能修改采集范围")
+        try:
+            source.config = source_config(source.kind, {**source.config, "include_paths": body.include_paths}, user.id)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
         await session.commit()
         return source_payload(source)
 
@@ -72,7 +123,9 @@ async def upload_revision(source_id: uuid.UUID, file: UploadFile, user: User = D
     if suffix not in DOCUMENT_EXTS:
         raise HTTPException(422, "第一阶段仅支持文档来源")
     async with async_session() as session:
-        await owned_source(session, source_id_text, user.id)
+        source = await owned_source(session, source_id_text, user.id)
+        if source.kind != "document":
+            raise HTTPException(422, "仓库来源请使用手动同步")
     revision_id = str(uuid.uuid4())
     directory = SOURCE_ROOT / source_id_text
     directory.mkdir(parents=True, exist_ok=True)
@@ -159,15 +212,57 @@ async def revisions(source_id: uuid.UUID, user: User = Depends(get_current_user)
         rows = (await session.execute(select(SourceRevision).where(SourceRevision.source_id == str(source_id))
                                       .order_by(SourceRevision.created_at.desc()))).scalars().all()
         return {"items": [{"id": r.id, "raw_hash": r.raw_hash, "state": r.state, "filename": r.filename,
+                           "commit": r.commit, "manifest": r.manifest,
                            "created_at": r.created_at, "published_at": r.published_at} for r in rows]}
 
 
-@router.get("/sources/{source_id}/revisions/{revision_id}/original")
-async def revision_original(source_id: uuid.UUID, revision_id: uuid.UUID, user: User = Depends(get_current_user)) -> FileResponse:
+@router.get("/sources/{source_id}/revisions/{revision_id}/documents")
+async def revision_documents(source_id: uuid.UUID, revision_id: uuid.UUID, user: User = Depends(get_current_user)) -> dict[str, Any]:
+    from app.models.source import SourceDocument
     async with async_session() as session:
         await owned_source(session, str(source_id), user.id)
         revision = await session.get(SourceRevision, str(revision_id))
-        if revision is None or revision.source_id != str(source_id) or not revision.file_path:
+        if revision is None or revision.source_id != str(source_id) or revision.state != "ready":
+            raise HTTPException(404, "版本不可用")
+        rows = (await session.execute(select(SourceDocument).where(SourceDocument.revision_id == revision.id)
+                                      .order_by(SourceDocument.logical_path))).scalars().all()
+        return {"items": [{"id": row.id, "logical_path": row.logical_path, "locator": row.locator} for row in rows]}
+
+
+@router.get("/sources/{source_id}/revisions/{revision_id}/documents/{document_id}")
+async def revision_document(source_id: uuid.UUID, revision_id: uuid.UUID, document_id: uuid.UUID,
+                            user: User = Depends(get_current_user)) -> dict[str, Any]:
+    from app.models.source import SourceDocument
+    async with async_session() as session:
+        await owned_source(session, str(source_id), user.id)
+        row = (await session.execute(select(SourceDocument).join(SourceRevision)
+            .where(SourceDocument.id == str(document_id), SourceDocument.revision_id == str(revision_id),
+                   SourceRevision.source_id == str(source_id), SourceRevision.state == "ready"))).scalar_one_or_none()
+        if row is None:
+            raise HTTPException(404, "原件不可用")
+        return {"id": row.id, "logical_path": row.logical_path, "text": row.text, "content": row.text, "locator": row.locator}
+
+
+@router.get("/sources/{source_id}/revisions/{revision_id}/original")
+async def revision_original(source_id: uuid.UUID, revision_id: uuid.UUID, user: User = Depends(get_current_user)) -> Response:
+    async with async_session() as session:
+        await owned_source(session, str(source_id), user.id)
+        revision = await session.get(SourceRevision, str(revision_id))
+        if revision is None or revision.source_id != str(source_id):
+            raise HTTPException(404, "原件不可用")
+        if revision.commit and revision.state == "ready":
+            import io
+            import zipfile
+
+            from app.models.source import SourceDocument
+            rows = (await session.execute(select(SourceDocument).where(SourceDocument.revision_id == revision.id))).scalars().all()
+            archive = io.BytesIO()
+            with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as output:
+                for row in rows:
+                    output.writestr(row.logical_path, row.text.encode("utf-8"))
+            return Response(archive.getvalue(), media_type="application/zip",
+                headers={"Content-Disposition": f'attachment; filename="snapshot-{revision.commit[:12]}.zip"'})
+        if not revision.file_path:
             raise HTTPException(404, "原件不可用")
         path = Path(revision.file_path).resolve()
         if not path.is_relative_to(SOURCE_ROOT.resolve()) or not path.is_file():

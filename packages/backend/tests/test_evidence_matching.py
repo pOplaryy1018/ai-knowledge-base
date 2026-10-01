@@ -49,3 +49,10 @@ def test_changed_indentation_is_not_a_relocated_quote():
     ).state == "changed"
     assert match_evidence("return 1", "def run():\n        return 1\n").state == "unchanged"
     assert match_evidence(" suffix", "prefix suffix").state == "unchanged"
+def test_commit_change_without_quote_or_position_change_is_unchanged():
+    from app.services.source_extraction import LocatedText
+
+    old = {"logical_path": "policy.py", "commit": "a", "line_start": 1, "line_end": 2,
+           "char_start": 0, "char_end": 7}
+    result = match_evidence("rule=3\n", LocatedText("policy.py", "rule=3\n", {"commit": "b"}), old)
+    assert result.state == "unchanged"

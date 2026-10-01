@@ -1,6 +1,6 @@
 """应用配置 ── 使用 pydantic-settings 从环境变量/.env 读取配置"""
 
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     embedding_model: str = "Qwen/Qwen3-Embedding-0.6B"
     embedding_cache_dir: str = "./models"
     model_preload: bool = False
+    source_repo_roots: list[dict[str, Any]] = []
+    source_git_executable: str = "git"
+    source_repo_cache_dir: str = "./uploads/git-cache"
 
     # ── 数据库 ──
     database_url: str = ""

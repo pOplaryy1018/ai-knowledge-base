@@ -19,6 +19,9 @@ class Source(Base):
     name: Mapped[str] = mapped_column(String(500))
     kind: Mapped[str] = mapped_column(String(30), default="document")
     current_revision_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("source_revisions.id", use_alter=True, name="fk_sources_current_revision", ondelete="SET NULL"))
+    current_publication_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("source_publications.id", use_alter=True, name="fk_sources_current_publication", ondelete="SET NULL"))
+    config: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    last_sync_manifest: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
     active_task_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -35,6 +38,8 @@ class SourceRevision(Base):
     state: Mapped[str] = mapped_column(String(20), default="staging")
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     file_path: Mapped[str | None] = mapped_column(String(1000))
+    commit: Mapped[str | None] = mapped_column(String(64))
+    manifest: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
     filename: Mapped[str | None] = mapped_column(String(500))
 
 
@@ -66,10 +71,11 @@ class SourceSyncTask(Base):
 
 class SourceChangeEvent(Base):
     __tablename__ = "source_change_events"
-    __table_args__ = (UniqueConstraint("source_id", "new_revision_id", name="uq_source_change_revision"),)
+    __table_args__ = (UniqueConstraint("publication_id", name="uq_source_change_publication"),)
 
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
     source_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("sources.id", ondelete="RESTRICT"), index=True)
+    publication_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("source_publications.id", ondelete="RESTRICT"))
     old_revision_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("source_revisions.id", ondelete="RESTRICT"))
     new_revision_id: Mapped[str] = mapped_column(UUID(as_uuid=False), ForeignKey("source_revisions.id", ondelete="RESTRICT"))
     state: Mapped[str] = mapped_column(String(20), default="pending", index=True)

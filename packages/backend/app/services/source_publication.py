@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.knowledge import KnowledgeItem
 from app.models.source import Source, SourceChangeEvent, SourceDocument, SourceRevision
+from app.models.source_publication import SourcePublication
 from app.services.source_extraction import LocatedText
 
 
@@ -62,14 +63,22 @@ async def publish_revision(session: AsyncSession, source_id: str, revision_id: s
     if source is None or source.deleted_at or source.archived_at or revision is None or revision.source_id != source_id:
         raise HTTPException(404, "资料来源不可用")
     existing = (await session.execute(select(SourceChangeEvent).where(
-        SourceChangeEvent.source_id == source_id, SourceChangeEvent.new_revision_id == revision_id))).scalar_one_or_none()
+        SourceChangeEvent.publication_id == source.current_publication_id))).scalar_one_or_none() if source.current_publication_id else None
     if source.current_revision_id == revision_id and existing is not None:
         return existing
-    if source.current_revision_id != expected_head or revision.state != "ready" or existing is not None:
+    if source.current_revision_id != expected_head or revision.state != "ready":
         raise HTTPException(409, "资料版本已变化或尚未就绪")
+    previous = await session.get(SourcePublication, source.current_publication_id) if source.current_publication_id else None
+    publication = SourcePublication(source_id=source.id, revision_id=revision.id,
+        previous_publication_id=source.current_publication_id, sequence=previous.sequence + 1 if previous else 1)
+    session.add(publication)
+    await session.flush()
     source.current_revision_id = revision_id
-    revision.published_at = datetime.now(timezone.utc)
-    event = SourceChangeEvent(source_id=source_id, old_revision_id=expected_head, new_revision_id=revision_id)
+    source.current_publication_id = publication.id
+    if revision.published_at is None:
+        revision.published_at = datetime.now(timezone.utc)
+    event = SourceChangeEvent(source_id=source_id, old_revision_id=expected_head,
+                              new_revision_id=revision_id, publication_id=publication.id)
     session.add(event)
     await session.flush()
     return event

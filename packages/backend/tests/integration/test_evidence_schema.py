@@ -47,7 +47,8 @@ async def test_revision_event_and_review_idempotency(db_session, owner_kb):
         async with db_session.begin_nested():
             db_session.add(SourceRevision(source_id=source.id, raw_hash="v1", pipeline_version="1"))
             await db_session.flush()
-    event = SourceChangeEvent(source_id=source.id, new_revision_id=revision.id)
+    from app.services.source_publication import publish_revision
+    event = await publish_revision(db_session, source.id, revision.id, revision.id)
     answer = SavedAnswer(user_id=owner.id, question="What?", source_ids=[source.id])
     db_session.add_all([event, answer])
     await db_session.flush()
@@ -59,7 +60,7 @@ async def test_revision_event_and_review_idempotency(db_session, owner_kb):
     await db_session.flush()
     with pytest.raises(IntegrityError):
         async with db_session.begin_nested():
-            db_session.add(SourceChangeEvent(source_id=source.id, new_revision_id=revision.id))
+            db_session.add(SourceChangeEvent(source_id=source.id, new_revision_id=revision.id, publication_id=event.publication_id))
             await db_session.flush()
     with pytest.raises(IntegrityError):
         async with db_session.begin_nested():

@@ -43,3 +43,26 @@ async def test_bad_revision_cannot_replace_head(db_session, owner_kb):
         await publish_revision(db_session, source.id, revision.id, None)
     assert exc.value.status_code == 409
     assert source.current_revision_id is None
+
+async def test_rollback_creates_distinct_publications(db_session, owner_kb):
+    from app.services.source_publication import publish_revision
+    user, kb = owner_kb
+    source = Source(user_id=user.id, knowledge_base_id=kb.id, name="rollback")
+    db_session.add(source)
+    await db_session.flush()
+    revisions = [SourceRevision(source_id=source.id, raw_hash=h, pipeline_version="test", state="ready") for h in ["a", "b"]]
+    db_session.add_all(revisions)
+    await db_session.flush()
+    a, b = revisions
+    first = await publish_revision(db_session, source.id, a.id, None)
+    middle = await publish_revision(db_session, source.id, b.id, a.id)
+    last = await publish_revision(db_session, source.id, a.id, b.id)
+    assert first.id != last.id
+    assert first.publication_id != last.publication_id
+    assert (await publish_revision(db_session, source.id, a.id, b.id)).id == last.id
+    from app.models.source_publication import SourcePublication
+    publications = (await db_session.execute(select(SourcePublication).where(SourcePublication.source_id == source.id).order_by(SourcePublication.sequence))).scalars().all()
+    assert [p.revision_id for p in publications] == [a.id, b.id, a.id]
+    assert [p.sequence for p in publications] == [1, 2, 3]
+    assert publications[2].previous_publication_id == middle.publication_id
+    assert source.current_publication_id == last.publication_id

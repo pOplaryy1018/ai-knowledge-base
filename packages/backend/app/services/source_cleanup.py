@@ -33,7 +33,10 @@ async def redact_source(session: AsyncSession, source_id: str) -> list[str]:
         return []
     source.deleted_at = datetime.now(timezone.utc)
     source.current_revision_id = None
+    source.current_publication_id = None
     source.active_task_id = None
+    source.config = {}
+    source.last_sync_manifest = {}
     revisions = (await session.execute(select(SourceRevision).where(SourceRevision.source_id == source_id))).scalars().all()
     ids = [revision.id for revision in revisions]
     paths = [revision.file_path for revision in revisions if revision.file_path]
@@ -45,6 +48,7 @@ async def redact_source(session: AsyncSession, source_id: str) -> list[str]:
     await session.execute(delete(SourceDocument).where(SourceDocument.revision_id.in_(ids)))
     for revision in revisions:
         revision.filename = None
+        revision.manifest = {}
     # Citation metadata and historical diffs also contain copies of the original text.
     messages = (await session.execute(select(Message).where(Message.citations.isnot(None)))).scalars().all()
     for message in messages:
@@ -79,6 +83,8 @@ async def purge_user_history(session: AsyncSession, user_id: str) -> list[str]:
     for source in sources:
         await session.execute(delete(SourceSyncTask).where(SourceSyncTask.source_id == source.id))
         await session.execute(delete(SourceChangeEvent).where(SourceChangeEvent.source_id == source.id))
+        from app.models.source_publication import SourcePublication
+        await session.execute(delete(SourcePublication).where(SourcePublication.source_id == source.id))
         await session.execute(delete(SourceRevision).where(SourceRevision.source_id == source.id))
         await session.execute(delete(Source).where(Source.id == source.id))
     await session.flush()

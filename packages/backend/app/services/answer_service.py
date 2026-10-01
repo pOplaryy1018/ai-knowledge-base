@@ -89,8 +89,10 @@ async def save_answer(session: AsyncSession, user_id: str, message_id: str) -> S
     await append_evidence(session, revision, list(message.citations or []))
     for source_id, head in heads.items():
         if revision.source_versions.get(source_id) != head:
+            source = await session.get(Source, source_id)
+            publication_id = source.current_publication_id if source else None
             event = (await session.execute(select(SourceChangeEvent).where(SourceChangeEvent.source_id == source_id,
-                    SourceChangeEvent.new_revision_id == head))).scalar_one_or_none()
+                    SourceChangeEvent.publication_id == publication_id))).scalar_one_or_none()
             if event:
                 await review_answer_for_event(session, saved, event)
     return saved

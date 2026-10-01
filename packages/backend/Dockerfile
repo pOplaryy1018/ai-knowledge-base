@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr-chi-tra \
     tesseract-ocr-eng \
     wget \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # LibreOffice（用于 .doc → .docx 转换）

@@ -11,6 +11,7 @@ from app.models.source import (
     SourceRevision,
     SourceSyncTask,
 )
+from app.models.source_publication import SourcePublication
 from app.models.user import User
 
-__all__ = ["Base", "User", "KnowledgeBase", "KnowledgeFile", "KnowledgeItem", "Agent", "Conversation", "Message", "ImportTask", "Source", "SourceRevision", "SourceDocument", "SourceSyncTask", "SourceChangeEvent", "SavedAnswer", "AnswerRevision", "AnswerEvidence", "ImpactReview", "AssetCleanup"]
+__all__ = ["SourcePublication", "Base", "User", "KnowledgeBase", "KnowledgeFile", "KnowledgeItem", "Agent", "Conversation", "Message", "ImportTask", "Source", "SourceRevision", "SourceDocument", "SourceSyncTask", "SourceChangeEvent", "SavedAnswer", "AnswerRevision", "AnswerEvidence", "ImpactReview", "AssetCleanup"]
