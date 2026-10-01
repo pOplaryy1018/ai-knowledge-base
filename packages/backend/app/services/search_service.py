@@ -1,22 +1,17 @@
-"""混合检索引擎 ── 稠密向量 + 稀疏关键词"""
+"""Authorized independent dense/keyword retrieval with reciprocal rank fusion."""
 
-import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import jieba
-from sqlalchemy import or_, select, text
-from sqlalchemy.sql import func
+from sqlalchemy import case, literal, or_, select
 
 from app.core.db import async_session
-from app.models.knowledge import KnowledgeItem
-from app.services.vectorizer import get_model
-
-logger = logging.getLogger(__name__)
+from app.models.knowledge import KnowledgeBase, KnowledgeItem
+from app.services.vectorizer import encode_texts
 
 
 @dataclass
 class SearchResult:
-    """检索结果"""
     item: KnowledgeItem
     score: float
     dense_score: float = 0.0
@@ -24,108 +19,40 @@ class SearchResult:
 
 
 def _extract_keywords(query: str, top_n: int = 10) -> list[str]:
-    """使用 jieba 提取关键词"""
-    words = jieba.lcut(query)
-    # 停用词过滤
-    stop_words = {"的", "了", "在", "是", "我", "有", "和", "就",
-                  "不", "人", "都", "一", "一个", "上", "也", "很",
-                  "到", "说", "要", "去", "你", "会", "着", "没有",
-                  "看", "好", "自己", "这", "他", "她", "它", "们",
-                  "那", "什么", "怎么", "如何", "为什么", "可以",
-                  "吗", "呢", "啊", "吧", "哦", "嗯", "哈", "呀"}
-    keywords = [w for w in words if len(w) > 1 and w not in stop_words]
-    # 去重并保留前 top_n
-    seen: set[str] = set()
-    result: list[str] = []
-    for w in keywords:
-        if w not in seen:
-            seen.add(w)
-            result.append(w)
-    return result[:top_n]
+    stop_words = {"的", "了", "在", "是", "我", "有", "和", "就", "怎么", "如何", "为什么", "什么", "可以", "没有"}
+    return list(dict.fromkeys(word for word in jieba.lcut(query) if len(word) > 1 and word not in stop_words))[:top_n]
 
 
-async def hybrid_search(
-    knowledge_ids: list[str],
-    query: str,
-    top_k: int = 5,
-    dense_weight: float = 0.7,
-) -> list[SearchResult]:
-    """混合检索 ── 向量检索 + 关键词匹配，加权合并"""
+async def hybrid_search(knowledge_ids: list[str], query: str, top_k: int = 5, dense_weight: float = 0.5, *, user_id: str, is_admin: bool = False) -> list[SearchResult]:
     if not knowledge_ids:
         return []
-
-    model = get_model()
-
-    # 1. 稠密向量检索：取 top_k * 3 候选
-    query_vector = model.encode(
-        query,
-        normalize_embeddings=True,
-        show_progress_bar=False,
-    ).tolist()
-
+    vector = (await encode_texts(query)).tolist()
+    filters = [KnowledgeItem.id.in_(knowledge_ids), KnowledgeItem.status == "available"]
+    if not is_admin:
+        filters.append(KnowledgeBase.user_id == user_id)
+    results: dict[str, SearchResult] = {}
     async with async_session() as session:
-        dense_result = await session.execute(
-            select(
-                KnowledgeItem,
-                (1 - KnowledgeItem.embedding.cosine_distance(query_vector)).label("score"),
-            )
-            .where(
-                KnowledgeItem.id.in_(knowledge_ids),
-                KnowledgeItem.status == "available",
-                KnowledgeItem.embedding.isnot(None),
-            )
-            .order_by(KnowledgeItem.embedding.cosine_distance(query_vector))
+        dense = await session.execute(
+            select(KnowledgeItem, (1 - KnowledgeItem.embedding.cosine_distance(vector)).label("score"))
+            .join(KnowledgeBase, KnowledgeItem.knowledge_base_id == KnowledgeBase.id)
+            .where(*filters, KnowledgeItem.embedding.isnot(None))
+            .order_by(KnowledgeItem.embedding.cosine_distance(vector), KnowledgeItem.id)
             .limit(top_k * 3)
         )
-        dense_results: dict[str, SearchResult] = {}
-        for row in dense_result.all():
-            item = row[0]
-            score = float(row.score)
-            dense_results[item.id] = SearchResult(
-                item=item, score=score * dense_weight,
-                dense_score=score, sparse_score=0.0,
-            )
-
-        # 2. 稀疏关键词检索
+        for rank, row in enumerate(dense.all(), start=1):
+            item, similarity = row[0], float(row[1])
+            results[item.id] = SearchResult(item, dense_weight / (60 + rank), dense_score=similarity)
         keywords = _extract_keywords(query)
-        if keywords and len(dense_results) < top_k:
-            keyword_conditions = []
-            for kw in keywords:
-                keyword_conditions.append(KnowledgeItem.title.ilike(f"%{kw}%"))
-                keyword_conditions.append(KnowledgeItem.content.ilike(f"%{kw}%"))
-            # 也搜索不在 dense_results 中的条目
-            keyword_result = await session.execute(
-                select(KnowledgeItem)
-                .where(
-                    KnowledgeItem.id.in_(knowledge_ids),
-                    KnowledgeItem.status == "available",
-                    KnowledgeItem.embedding.isnot(None),
-                    or_(*keyword_conditions),
-                )
-                .limit(top_k * 2)
+        if keywords:
+            matches = [or_(KnowledgeItem.title.ilike(f"%{word}%"), KnowledgeItem.content.ilike(f"%{word}%")) for word in keywords]
+            match_score = sum((case((condition, 1), else_=0) for condition in matches), start=literal(0))
+            sparse = await session.execute(
+                select(KnowledgeItem).join(KnowledgeBase, KnowledgeItem.knowledge_base_id == KnowledgeBase.id)
+                .where(*filters, or_(*matches)).order_by(match_score.desc(), KnowledgeItem.id).limit(top_k * 3)
             )
-            for item in keyword_result.scalars().all():
-                match_count = sum(
-                    1 for kw in keywords
-                    if kw in item.title or kw in item.content
-                )
-                sparse_score = min(match_count / max(len(keywords), 1), 1.0)
-                if item.id in dense_results:
-                    sr = dense_results[item.id]
-                    sr.sparse_score = sparse_score
-                    sr.score += sparse_score * (1 - dense_weight)
-                else:
-                    dense_results[item.id] = SearchResult(
-                        item=item,
-                        score=sparse_score * (1 - dense_weight),
-                        dense_score=0.0,
-                        sparse_score=sparse_score,
-                    )
-
-    # 按综合分数排序
-    sorted_results = sorted(
-        dense_results.values(),
-        key=lambda r: r.score,
-        reverse=True,
-    )
-    return sorted_results[:top_k]
+            for rank, item in enumerate(sparse.scalars().all(), start=1):
+                if item.id not in results:
+                    results[item.id] = SearchResult(item, 0.0)
+                results[item.id].score += (1 - dense_weight) / (60 + rank)
+                results[item.id].sparse_score = 1 / rank
+    return sorted(results.values(), key=lambda result: (-result.score, result.item.id))[:top_k]

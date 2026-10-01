@@ -1,20 +1,20 @@
 """对话路由 ── SSE 流式问答 + 对话历史管理"""
 
-import json
+from contextlib import aclosing
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import select, func, delete
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy import func, select
 from sse_starlette.sse import EventSourceResponse
 
 from app.core.db import async_session
+from app.core.security import get_current_user
 from app.models.agent import Conversation, Message
 from app.models.user import User
-from app.core.security import get_current_user
 from app.schemas.chat import (
     ChatRequest,
-    ConversationResponse,
     ConversationListResponse,
+    ConversationResponse,
     MessageResponse,
 )
 from app.services.chat_service import run_chat_stream
@@ -32,16 +32,17 @@ async def chat_with_agent(
     """SSE 流式问答端点"""
 
     async def event_generator() -> Any:
-        async for sse_event in run_chat_stream(
+        async with aclosing(run_chat_stream(
             agent_id=agent_id,
             user_id=str(user.id),
             message=body.message,
             conversation_id=body.conversation_id,
-        ):
-            # 检查客户端是否断开
-            if await request.is_disconnected():
-                break
-            yield sse_event
+            is_admin=user.role == "super_admin",
+        )) as stream:
+            async for sse_event in stream:
+                if await request.is_disconnected():
+                    break
+                yield sse_event
 
     return EventSourceResponse(event_generator())
 

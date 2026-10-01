@@ -1,7 +1,7 @@
 """认证路由 ── 登录、刷新令牌、获取当前用户"""
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from app.core.db import async_session
 from app.core.security import (
@@ -12,18 +12,21 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
+from app.models.knowledge import KnowledgeBase, KnowledgeFile
 from app.models.user import User
 from app.schemas.auth import (
+    VALID_ROLES,
     LoginRequest,
     LoginResponse,
     RefreshTokenRequest,
     RegisterRequest,
     RoleInfo,
     TokenRefreshResponse,
+    UserCreate,
     UserInfo,
     UserUpdate,
-    VALID_ROLES,
 )
+from app.services.file_storage import remove_uploads
 
 router: APIRouter = APIRouter(prefix="/auth", tags=["认证"])
 
@@ -143,12 +146,11 @@ async def list_users(
 
 @router.post("/users", response_model=UserInfo)
 async def create_user(
-    username: str,
-    password: str,
-    role: str = "user",
+    body: UserCreate,
     current_user: User = Depends(get_current_user),
 ) -> UserInfo:
     """管理员创建新用户（仅 super_admin 可操作）"""
+    username, password, role = body.username, body.password, body.role
     if current_user.role != "super_admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -234,7 +236,7 @@ async def delete_user(
         )
 
     async with async_session() as session:
-        result = await session.execute(select(User).where(User.id == user_id))
+        result = await session.execute(select(User).where(User.id == user_id).with_for_update())
         user: User | None = result.scalar_one_or_none()
 
         if not user:
@@ -246,8 +248,11 @@ async def delete_user(
                 detail="不允许删除自己",
             )
 
+        await session.execute(select(KnowledgeBase).where(KnowledgeBase.user_id == user_id).order_by(KnowledgeBase.id).with_for_update())
+        paths = (await session.execute(select(KnowledgeFile.file_path).join(KnowledgeBase).where(or_(KnowledgeBase.user_id == user_id, KnowledgeFile.user_id == user_id)))).scalars().all()
         await session.delete(user)
         await session.commit()
+    remove_uploads(paths)
 
 
 # ── 角色定义（静态元数据 + 动态用户数）──

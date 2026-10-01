@@ -1,23 +1,22 @@
 """FastAPI 应用入口 ── AI 知识库管理平台后端"""
 
 from collections.abc import AsyncIterator
-from typing import Any
-
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.health import router as health_router
+from app.api.import_api import router as import_router
 from app.core.config import settings
 from app.core.db import engine
-from app.core.redis import init_redis, close_redis
-from app.api.health import router as health_router
-from app.routers.auth import router as auth_router
-from app.routers.knowledge import router as knowledge_router
-from app.api.import_api import router as import_router
+from app.core.redis import close_redis, init_redis
 from app.routers.agent import router as agent_router
+from app.routers.auth import router as auth_router
 from app.routers.chat import router as chat_router
 from app.routers.file import router as file_router
+from app.routers.knowledge import router as knowledge_router
 from app.routers.statistics import router as statistics_router
 from app.seed import seed_admin
 

@@ -135,6 +135,7 @@ class KnowledgeFile(Base):
         default=0,
         comment="生成的知识片段数",
     )
+    active_task_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
     created_at: Mapped[datetime]
     updated_at: Mapped[datetime]
 
@@ -147,6 +148,7 @@ class KnowledgeFile(Base):
     items: Mapped[list["KnowledgeItem"]] = relationship(
         "KnowledgeItem",
         back_populates="file",
+        cascade="all, delete-orphan",
     )
 
 
@@ -169,7 +171,7 @@ class KnowledgeItem(Base):
     )
     file_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False),
-        ForeignKey("knowledge_files.id", ondelete="SET NULL"),
+        ForeignKey("knowledge_files.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
         comment="来源文件 ID",

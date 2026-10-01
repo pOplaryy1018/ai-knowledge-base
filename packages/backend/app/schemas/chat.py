@@ -3,8 +3,9 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from app.services.llm_service import validate_prompt_template
 
 # ── Agent ──
 
@@ -16,6 +17,12 @@ class AgentCreate(BaseModel):
     knowledge_ids: list[str] = Field(default_factory=list, description="关联的知识条目 ID 列表")
     prompt_template: Optional[str] = Field(None, description="自定义系统提示词模板")
 
+    @field_validator("prompt_template")
+    @classmethod
+    def validate_prompt(cls, value: str | None) -> str | None:
+        validate_prompt_template(value)
+        return value
+
 
 class AgentUpdate(BaseModel):
     """更新 Agent 请求"""
@@ -23,6 +30,12 @@ class AgentUpdate(BaseModel):
     description: Optional[str] = None
     knowledge_ids: Optional[list[str]] = None
     prompt_template: Optional[str] = None
+
+    @field_validator("prompt_template")
+    @classmethod
+    def validate_prompt(cls, value: str | None) -> str | None:
+        validate_prompt_template(value)
+        return value
 
 
 class AgentResponse(BaseModel):

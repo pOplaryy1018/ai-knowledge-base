@@ -5,7 +5,9 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
+
+from app.services.file_types import CODE_EXTS, TEXT_EXTS
 
 logger = logging.getLogger(__name__)
 
@@ -71,11 +73,11 @@ async def parse_image(file_path: str) -> str:
     try:
         import pytesseract
         from PIL import Image
-    except ImportError:
-        raise ImportError("OCR 服务未安装（缺少 pytesseract 或 Pillow），无法处理图片文件")
+    except ImportError as exc:
+        raise ImportError("OCR 服务未安装（缺少 pytesseract 或 Pillow），无法处理图片文件") from exc
 
     img = Image.open(file_path)
-    text = pytesseract.image_to_string(img, lang="chi_sim+eng")
+    text = cast(str, pytesseract.image_to_string(img, lang="chi_sim+eng"))
     if not text.strip():
         raise ValueError("图片中未检测到可识别文字")
     return text.strip()
@@ -107,6 +109,7 @@ PARSER_MAP: dict[str, Any] = {
     ".bmp": parse_image,
     ".webp": parse_image,
 }
+PARSER_MAP.update({extension: parse_txt for extension in CODE_EXTS | TEXT_EXTS if extension not in PARSER_MAP})
 
 
 async def parse_file(file_path: str) -> str:

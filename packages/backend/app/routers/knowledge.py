@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 
 from app.core.db import async_session
 from app.core.security import get_current_user
-from app.models.knowledge import KnowledgeBase, KnowledgeItem
+from app.models.knowledge import KnowledgeBase, KnowledgeFile, KnowledgeItem
 from app.models.user import User
 from app.schemas.knowledge import (
     KnowledgeBaseCreate,
@@ -17,6 +17,7 @@ from app.schemas.knowledge import (
     KnowledgeItemListResponse,
     KnowledgeItemResponse,
 )
+from app.services.file_storage import remove_uploads
 
 router: APIRouter = APIRouter(tags=["知识库管理"])
 
@@ -38,6 +39,9 @@ async def create_knowledge_base(
 ) -> KnowledgeBaseResponse:
     """创建知识库"""
     async with async_session() as session:
+        owner = await session.execute(select(User).where(User.id == current_user.id).with_for_update())
+        if owner.scalar_one_or_none() is None:
+            raise HTTPException(status_code=401, detail="用户已被删除")
         kb: KnowledgeBase = KnowledgeBase(
             name=body.name,
             description=body.description,
@@ -138,15 +142,17 @@ async def delete_knowledge_base(
     """删除知识库（级联删除所有知识条目）"""
     async with async_session() as session:
         result = await session.execute(
-            select(KnowledgeBase).where(KnowledgeBase.id == kb_id)
+            select(KnowledgeBase).where(KnowledgeBase.id == kb_id).with_for_update()
         )
         kb: KnowledgeBase | None = result.scalar_one_or_none()
         if not kb:
             raise HTTPException(status_code=404, detail="知识库不存在")
         verify_kb_access(kb, current_user)
 
+        paths = (await session.execute(select(KnowledgeFile.file_path).where(KnowledgeFile.knowledge_base_id == kb_id))).scalars().all()
         await session.delete(kb)
         await session.commit()
+    remove_uploads(paths)
 
 
 # ═══════════════════════════════════════════

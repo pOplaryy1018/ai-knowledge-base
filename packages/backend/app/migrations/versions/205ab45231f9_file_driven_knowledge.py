@@ -7,10 +7,9 @@ Create Date: 2026-05-24 16:28:54.003245
 from collections.abc import Sequence
 from typing import Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
-
 
 # revision identifiers, used by Alembic.
 revision: str = '205ab45231f9'
@@ -32,9 +31,9 @@ def upgrade() -> None:
         ),
     )
 
-    # 2. 统一 source 枚举值：import → file_import，删除 manual 条目
+    # 2. 统一 source 枚举值，保留历史条目
     op.execute("UPDATE knowledge_items SET source = 'file_import' WHERE source = 'import'")
-    op.execute("DELETE FROM knowledge_items WHERE source = 'manual'")
+    # Preserve existing manual knowledge; cleanup requires a separate explicit decision.
 
     # 3. 修改 file_id 外键：DROP + ADD（PG 不支持 ALTER CONSTRAINT ON DELETE）
     op.execute("""
@@ -70,7 +69,7 @@ def downgrade() -> None:
     op.drop_index('idx_knowledge_files_kb_status')
     op.drop_constraint('fk_knowledge_items_file_id', 'knowledge_items', type_='foreignkey')
     op.create_foreign_key(
-        None, 'knowledge_items', 'knowledge_files',
+        'fk_knowledge_items_file_id', 'knowledge_items', 'knowledge_files',
         ['file_id'], ['id'],
         ondelete='SET NULL',
     )

@@ -3,6 +3,7 @@
 from typing import Any
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 from app.core.db import check_database_health
 from app.core.redis import check_redis_health
@@ -21,3 +22,14 @@ async def health_check() -> dict[str, Any]:
         "database": db_status,
         "redis": redis_status,
     }
+
+
+@router.get("/live")
+async def liveness() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@router.get("/ready")
+async def readiness() -> JSONResponse:
+    state = await health_check()
+    return JSONResponse(state, status_code=200 if state["status"] == "ok" else 503)

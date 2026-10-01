@@ -8,6 +8,7 @@ import type { UserInfo } from '@akb/shared'
 import { login as loginApi, getMe } from '@/api/auth'
 import { setupApiClient } from '@/api/client'
 import router from '@/router'
+import { queryClient } from '@/queryClient'
 
 const TOKEN_KEY = 'akb_access_token'
 const REFRESH_KEY = 'akb_refresh_token'
@@ -18,6 +19,7 @@ export const useUserStore = defineStore('user', () => {
   const refreshTokenValue = ref<string | null>(localStorage.getItem(REFRESH_KEY))
   const userInfo = ref<UserInfo | null>(null)
   const loading = ref(false)
+  const generation = ref(0)
 
   // ── 计算属性 ──
   const isLoggedIn = computed(() => !!accessToken.value)
@@ -26,6 +28,7 @@ export const useUserStore = defineStore('user', () => {
 
   // ── 初始化客户端依赖 ──
   setupApiClient({
+    getGeneration: () => generation.value,
     getToken: () => accessToken.value,
     onUnauthorized: () => {
       clearAuth()
@@ -39,6 +42,7 @@ export const useUserStore = defineStore('user', () => {
 
   // ── 内部方法 ──
   function saveTokens(access: string, refresh: string) {
+    clearAuth()
     accessToken.value = access
     refreshTokenValue.value = refresh
     localStorage.setItem(TOKEN_KEY, access)
@@ -46,6 +50,9 @@ export const useUserStore = defineStore('user', () => {
   }
 
   function clearAuth() {
+    generation.value++
+    void queryClient.cancelQueries()
+    queryClient.clear()
     accessToken.value = null
     refreshTokenValue.value = null
     userInfo.value = null
@@ -58,22 +65,13 @@ export const useUserStore = defineStore('user', () => {
   /** 登录：调用 API，存储 token，拉取用户信息 */
   async function login(username: string, password: string) {
     loading.value = true
+    const requestGeneration = generation.value
     try {
       const res = await loginApi({ username, password })
+      if (requestGeneration !== generation.value) return
+      if (res.user.role !== 'super_admin') throw new Error('此账号没有管理权限')
       saveTokens(res.access_token, res.refresh_token)
       userInfo.value = res.user
-      // 登录后立即让客户端获取新 token
-      setupApiClient({
-        getToken: () => accessToken.value,
-        onUnauthorized: () => {
-          clearAuth()
-          router.push('/login')
-        },
-        getRefreshToken: () => refreshTokenValue.value,
-        onTokenRefreshed: (token: string) => {
-          accessToken.value = token
-          localStorage.setItem(TOKEN_KEY, token)
-        }})
       return res
     } finally {
       loading.value = false
@@ -90,19 +88,21 @@ export const useUserStore = defineStore('user', () => {
   async function fetchUser() {
     if (!accessToken.value) return
     loading.value = true
+    const requestGeneration = generation.value
     try {
       const user = await getMe()
+      if (requestGeneration !== generation.value) return
       userInfo.value = user
     } catch {
       // token 失效则清理
-      clearAuth()
+      if (requestGeneration === generation.value) clearAuth()
     } finally {
       loading.value = false
     }
   }
 
   return {
-    accessToken,
+    generation, accessToken,
     refreshTokenValue,
     userInfo,
     loading,

@@ -1,5 +1,5 @@
 # ruff 配置 ── 快速 Python 代码检查与格式化
-target-version = "py311"
+target-version = "py312"
 
 line-length = 100
 
@@ -18,6 +18,10 @@ select = [
 ignore = [
   "E501",  # 行长度由 formatter 处理
 ]
+
+[lint.flake8-bugbear]
+# FastAPI dependency and validation descriptors are immutable defaults.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.File", "fastapi.Form"]
 
 [format]
 quote-style = "double"

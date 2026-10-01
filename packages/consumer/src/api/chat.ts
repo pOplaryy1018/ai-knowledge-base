@@ -2,6 +2,7 @@
  * 聊天 API ── SSE 流式对话 + REST 接口（对话列表、消息历史、删除）
  */
 
+import { readSSE } from '@akb/shared'
 import type {
   ConversationListResponse,
   ChatMessage,
@@ -10,7 +11,7 @@ import type {
   SSEDoneEvent,
   SSEErrorEvent,
   CitationItem} from '@akb/shared'
-import { getApiClient } from './client'
+import { getApiClient, getAccessToken, getAuthGeneration, refreshAccessToken, handleUnauthorized } from './client'
 
 // ── SSE 事件类型 ──
 
@@ -54,18 +55,27 @@ export async function* chatSSE(
   message: string,
   conversationId: string | undefined,
   token: string,
+  signal?: AbortSignal,
 ): AsyncGenerator<SSEData> {
-  const response = await fetch(`/api/chat/agents/${agentId}/chat`, {
+  const generation = getAuthGeneration()
+  const request = () => fetch(`/api/chat/agents/${agentId}/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`},
+      Authorization: `Bearer ${getAccessToken() || token}`},
     body: JSON.stringify({
       message,
       conversation_id: conversationId}),
-    // 注意：不传 signal，因为 AbortController signal 在某些浏览器中
-    // 会导致 SSE 流式请求立即被中止（ERR_ABORTED）
+    signal,
   })
+  let response = await request()
+  if (response.status === 401 && generation === getAuthGeneration()) {
+    const refreshed = await refreshAccessToken()
+    if (generation !== getAuthGeneration() || signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    if (refreshed) response = await request()
+    if (!refreshed || response.status === 401) handleUnauthorized()
+  }
+  if (generation !== getAuthGeneration()) throw new DOMException('Account changed', 'AbortError')
 
   if (!response.ok) {
     const errorBody = await response.text().catch(() => '')
@@ -83,71 +93,9 @@ export async function* chatSSE(
     throw new Error('浏览器不支持流式读取')
   }
 
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder('utf-8')
-  let buffer = ''
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-
-      // SSE 协议：事件以双换行分隔
-      const parts = buffer.split('\n\n')
-      // 最后一个可能是不完整的事件，保留在 buffer 中
-      buffer = parts.pop() || ''
-
-      for (const part of parts) {
-        if (!part.trim()) continue
-
-        const lines = part.split('\n')
-        let eventType = ''
-        let data = ''
-
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            eventType = line.slice(7).trim()
-          } else if (line.startsWith('data: ')) {
-            data = line.slice(6)
-          } else if (line.startsWith('data:')) {
-            data = line.slice(5)
-          }
-        }
-
-        if (eventType && data !== undefined) {
-          yield {
-            type: eventType as SSEEventType,
-            data: parseSSEData(eventType, data)}
-        }
-      }
-    }
-
-    // 处理缓冲区中剩余的数据
-    if (buffer.trim()) {
-      const lines = buffer.split('\n')
-      let eventType = ''
-      let data = ''
-
-      for (const line of lines) {
-        if (line.startsWith('event: ')) {
-          eventType = line.slice(7).trim()
-        } else if (line.startsWith('data: ')) {
-          data = line.slice(6)
-        } else if (line.startsWith('data:')) {
-          data = line.slice(5)
-        }
-      }
-
-      if (eventType && data !== undefined) {
-        yield {
-          type: eventType as SSEEventType,
-          data: parseSSEData(eventType, data)}
-      }
-    }
-  } finally {
-    reader.releaseLock()
+  for await (const event of readSSE(response.body)) {
+    if (generation !== getAuthGeneration() || signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    yield { type: event.type as SSEEventType, data: parseSSEData(event.type, event.data) }
   }
 }
 

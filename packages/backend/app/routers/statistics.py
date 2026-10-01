@@ -1,9 +1,10 @@
 """统计路由 ── 概览、趋势、热门知识、标签词云"""
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, literal_column, select, text, union_all
+from sqlalchemy import Result, Select, func, literal_column, select, text, union_all
 
 from app.core.db import async_session
 from app.core.security import get_current_user
@@ -11,12 +12,12 @@ from app.models.agent import Agent
 from app.models.knowledge import KnowledgeBase, KnowledgeItem
 from app.models.user import User
 from app.schemas.statistics import (
+    ItemsByType,
     OverviewStats,
     RecentActivity,
-    ItemsByType,
-    TrendPoint,
-    TopItem,
     TagFrequency,
+    TopItem,
+    TrendPoint,
 )
 
 router: APIRouter = APIRouter(prefix="/statistics", tags=["统计"])
@@ -151,11 +152,11 @@ async def get_overview(
         # 计算环比
         items_growth = 0.0
         if items_yesterday and items_yesterday > 0:
-            items_growth = round((items_today - items_yesterday) / items_yesterday * 100, 1)
+            items_growth = round(((items_today or 0) - items_yesterday) / items_yesterday * 100, 1)
 
         chats_growth = 0.0
         if chats_yesterday and chats_yesterday > 0:
-            chats_growth = round((today_chats - chats_yesterday) / chats_yesterday * 100, 1)
+            chats_growth = round(((today_chats or 0) - chats_yesterday) / chats_yesterday * 100, 1)
 
         return OverviewStats(
             total_items=total_items or 0,
@@ -177,7 +178,7 @@ async def get_recent_activities(
 
     async with async_session() as session:
         # 知识库创建
-        kb_stmt = (
+        kb_stmt: Select[*tuple[Any, ...]] = (
             select(
                 KnowledgeBase.id.label("id"),
                 literal_column("'kb_created'").label("type"),
@@ -190,7 +191,7 @@ async def get_recent_activities(
         kb_stmt = kb_stmt.order_by(KnowledgeBase.created_at.desc()).limit(limit)
 
         # 条目创建
-        item_stmt = (
+        item_stmt: Select[*tuple[Any, ...]] = (
             select(
                 KnowledgeItem.id.label("id"),
                 literal_column("'item_created'").label("type"),
@@ -203,7 +204,7 @@ async def get_recent_activities(
         item_stmt = item_stmt.order_by(KnowledgeItem.created_at.desc()).limit(limit)
 
         # 条目导入
-        import_stmt = (
+        import_stmt: Select[*tuple[Any, ...]] = (
             select(
                 KnowledgeItem.id.label("id"),
                 literal_column("'import_done'").label("type"),
@@ -216,7 +217,7 @@ async def get_recent_activities(
         import_stmt = import_stmt.order_by(KnowledgeItem.created_at.desc()).limit(limit)
 
         # Agent 创建
-        agent_stmt = (
+        agent_stmt: Select[*tuple[Any, ...]] = (
             select(
                 Agent.id.label("id"),
                 literal_column("'agent_created'").label("type"),
@@ -280,7 +281,7 @@ async def get_items_by_type(
         result = await session.execute(stmt)
         rows = result.fetchall()
 
-        return [ItemsByType(type=row.type, count=row.count) for row in rows]
+        return [ItemsByType(type=row.type, count=int(row._mapping["count"])) for row in rows]
 
 
 @router.get("/items-trend", response_model=list[TrendPoint])
@@ -314,7 +315,7 @@ async def get_items_trend(
         result = await session.execute(stmt)
         rows = result.fetchall()
 
-        return [TrendPoint(date=row.date, count=row.count) for row in rows]
+        return [TrendPoint(date=row.date, count=int(row._mapping["count"])) for row in rows]
 
 
 @router.get("/chat-trend", response_model=list[TrendPoint])
@@ -360,7 +361,7 @@ async def get_chat_trend(
         result = await session.execute(stmt)
         rows = result.fetchall()
 
-        return [TrendPoint(date=row.date, count=row.count) for row in rows]
+        return [TrendPoint(date=row.date, count=int(row._mapping["count"])) for row in rows]
 
 
 @router.get("/top-items", response_model=list[TopItem])
@@ -373,6 +374,7 @@ async def get_top_items(
     kb_ids = await _get_accessible_kb_ids(current_user)
 
     async with async_session() as session:
+        stmt: Select[*tuple[Any, ...]]
         # 从 messages.citations JSONB 中统计 knowledge_title 出现频率
         if kb_ids is not None:
             stmt = (
@@ -407,11 +409,11 @@ async def get_top_items(
                 .limit(limit)
             )
 
-        result = await session.execute(stmt)
+        result: Result[Any] = await session.execute(stmt)
         rows = result.fetchall()
 
         return [
-            TopItem(title=row.title or "未知", count=row.count)
+            TopItem(title=row.title or "未知", count=int(row._mapping["count"]))
             for row in rows
         ]
 
@@ -426,7 +428,7 @@ async def get_tags_wordcloud(
 
     async with async_session() as session:
         conditions = ["tags IS NOT NULL"]
-        params: dict = {}
+        params: dict[str, str | list[str]] = {}
 
         if kb_id:
             conditions.append("knowledge_base_id = :kb_id")
@@ -440,7 +442,7 @@ async def get_tags_wordcloud(
 
         where_clause = " AND ".join(conditions)
 
-        stmt = (
+        stmt: Select[*tuple[Any, ...]] = (
             select(
                 literal_column("unnest(tags)").label("tag"),
                 func.count().label("count"),
@@ -454,4 +456,4 @@ async def get_tags_wordcloud(
         result = await session.execute(stmt, params)
         rows = result.fetchall()
 
-        return [TagFrequency(tag=row.tag, count=row.count) for row in rows]
+        return [TagFrequency(tag=row.tag, count=int(row._mapping["count"])) for row in rows]

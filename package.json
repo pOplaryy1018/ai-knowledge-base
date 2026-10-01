@@ -12,7 +12,9 @@
     "build:admin": "pnpm --filter @akb/admin build",
     "build:consumer": "pnpm --filter @akb/consumer build",
     "lint": "pnpm -r lint",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "typecheck": "pnpm --filter @akb/admin typecheck && pnpm --filter @akb/consumer typecheck"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -21,7 +23,8 @@
     "eslint-plugin-vue": "^10.9.1",
     "prettier": "^3.4.2",
     "typescript": "^5.7.0",
-    "typescript-eslint": "^8.59.4"
+    "typescript-eslint": "^8.59.4",
+    "vitest": "3.2.0"
   },
   "engines": {
     "node": ">=20.0.0",

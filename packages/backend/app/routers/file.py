@@ -12,10 +12,14 @@ from sqlalchemy import func, select
 
 from app.core.db import async_session
 from app.core.security import get_current_user, require_super_admin
+from app.models.import_task import ImportTask
 from app.models.knowledge import KnowledgeBase, KnowledgeFile, KnowledgeItem
 from app.models.user import User
-from app.schemas.knowledge import KnowledgeFileListResponse, KnowledgeFileResponse
 from app.schemas.import_schema import FileRetryResponse
+from app.schemas.knowledge import KnowledgeFileListResponse, KnowledgeFileResponse
+from app.services.file_storage import remove_uploads
+from app.services.file_types import CODE_EXTS, DOC_EXTS, IMAGE_EXTS, TEXT_EXTS
+from app.services.import_tasks import enqueue_import
 
 router: APIRouter = APIRouter(tags=["文件管理"])
 
@@ -103,7 +107,7 @@ async def delete_file(
             select(KnowledgeFile).where(
                 KnowledgeFile.id == file_id,
                 KnowledgeFile.knowledge_base_id == kb_id,
-            )
+            ).with_for_update()
         )
         kf = result.scalar_one_or_none()
         if not kf:
@@ -114,8 +118,7 @@ async def delete_file(
         await session.delete(kf)
         await session.commit()
 
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        remove_uploads([file_path])
 
 
 # ── 重试失败文件 ──
@@ -131,11 +134,17 @@ async def retry_file(
 ) -> FileRetryResponse:
     """重试失败文件的导入任务"""
     async with async_session() as session:
+        owner = await session.execute(select(User).where(User.id == current_user.id).with_for_update())
+        if owner.scalar_one_or_none() is None:
+            raise HTTPException(status_code=401, detail="用户已被删除")
+        parent = await session.execute(select(KnowledgeBase).where(KnowledgeBase.id == kb_id).with_for_update())
+        if parent.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="知识库不存在")
         result = await session.execute(
             select(KnowledgeFile).where(
                 KnowledgeFile.id == file_id,
                 KnowledgeFile.knowledge_base_id == kb_id,
-            )
+            ).with_for_update()
         )
         kf = result.scalar_one_or_none()
         if not kf:
@@ -161,21 +170,16 @@ async def retry_file(
         kf.status = "pending"
         kf.error_message = None
         new_task_id = str(uuid.uuid4())
+        kf.active_task_id = new_task_id
+        task = ImportTask(id=new_task_id, file_id=file_id, user_id=current_user.id)
+        session.add(task)
 
         await session.commit()
 
     # 重新入队 ARQ
     from app.api.import_api import get_arq
 
-    arq = await get_arq()
-    await arq.enqueue_job(
-        "process_import",
-        task_id=new_task_id,
-        file_id=file_id,
-        kb_id=kb_id,
-        file_path=kf.file_path,
-        filename=kf.original_filename,
-    )
+    await enqueue_import(task, kf, get_arq)
 
     return FileRetryResponse(file_id=file_id, task_id=new_task_id, status="pending")
 
@@ -243,11 +247,6 @@ async def admin_list_files(
 
 # ── 文件类型分类 ──
 
-TEXT_EXTS: set[str] = {".txt", ".md", ".markdown", ".json", ".yaml", ".yml", ".xml", ".toml"}
-CODE_EXTS: set[str] = {".py", ".ts", ".tsx", ".js", ".jsx", ".java", ".go", ".rs", ".c", ".cpp", ".h"}
-DOC_EXTS: set[str] = {".pdf", ".docx", ".doc"}
-IMAGE_EXTS: set[str] = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"}
-
 MAX_PREVIEW_CHARS: int = 100 * 1024
 MAX_DOC_PREVIEW_CHARS: int = 5000
 
@@ -260,7 +259,7 @@ async def get_file_preview(
     kb_id: str,
     file_id: str,
     current_user: User = Depends(get_current_user),
-) -> dict:
+) -> dict[str, object]:
     """获取文件预览内容"""
     async with async_session() as session:
         result = await session.execute(

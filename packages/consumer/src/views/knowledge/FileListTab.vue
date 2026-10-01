@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { IconDelete, IconSync, IconUpload, IconEye } from '@arco-design/web-vue/es/icon'
 import { listFiles, deleteFile, retryFile } from '@/api/import'
@@ -8,7 +8,7 @@ import type { KnowledgeFile } from '@akb/shared'
 import type { TableColumnData } from '@arco-design/web-vue'
 
 const props = defineProps<{ kbId: string; refreshTrigger: number }>()
-const emit = defineEmits<{ upload: [] }>()
+const emit = defineEmits<{ upload: []; retry: [taskId: string, filename: string] }>()
 
 const files = ref<KnowledgeFile[]>([])
 const total = ref(0)
@@ -41,20 +41,24 @@ const columns: TableColumnData[] = [
   { slotName: 'actions', title: '操作', width: 120 },
 ]
 
+let requestId = 0
 async function fetchFiles() {
+  const id = ++requestId
   loading.value = true
   try {
     const res = await listFiles(props.kbId, {
       page: page.value, size: size.value,
       search: search.value || undefined,
     })
+    if (id !== requestId) return
     files.value = res.items ?? []
     total.value = res.total ?? 0
   } catch {
+    if (id !== requestId) return
     files.value = []
     total.value = 0
   } finally {
-    loading.value = false
+    if (id === requestId) loading.value = false
   }
 }
 
@@ -73,10 +77,11 @@ function handleDelete(file: KnowledgeFile) {
     title: '删除文件',
     onOk: async () => {
       deleting.value = file.id
+      try {
       await deleteFile(props.kbId, file.id)
       Message.success('文件已删除')
       await fetchFiles()
-      deleting.value = null
+      } finally { deleting.value = null }
     },
     onCancel: () => {},
   })
@@ -86,6 +91,7 @@ async function handleRetry(file: KnowledgeFile) {
   retrying.value = file.id
   try {
     const res = await retryFile(props.kbId, file.id)
+    emit('retry', res.task_id, file.original_filename)
     Message.success(`已重新入队，任务 ID: ${res.task_id}`)
     await fetchFiles()
   } catch (e: any) {
@@ -103,6 +109,8 @@ function formatSize(bytes: number): string {
 
 watch([page], () => fetchFiles())
 watch(() => props.refreshTrigger, () => { page.value = 1; fetchFiles() })
+watch(() => props.kbId, () => { requestId++; page.value = 1; fetchFiles() })
+onUnmounted(() => { requestId++; clearTimeout(searchTimer) })
 onMounted(() => fetchFiles())
 </script>
 

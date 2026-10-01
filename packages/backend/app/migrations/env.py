@@ -1,15 +1,15 @@
 import asyncio
+
+# 将项目根目录加入 sys.path，以便导入 app 包
+import sys  # noqa: E402
 from logging.config import fileConfig
 from pathlib import Path
 
+from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from alembic import context
-
-# 将项目根目录加入 sys.path，以便导入 app 包
-import sys  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 # Alembic 配置对象

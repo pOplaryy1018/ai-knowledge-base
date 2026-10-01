@@ -1,46 +1,73 @@
-/**
- * API 客户端工厂 ── 创建带拦截器的 Axios 实例
- * 不依赖任何 UI 框架，保持 shared 包纯净性。
- * 401 处理通过回调注入，由调用方（admin/consumer）传入重定向逻辑。
- */
-
+import axios, { CanceledError } from 'axios'
 import type { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios'
-import axios from 'axios'
 
 export interface ApiClientOptions {
   baseURL: string
-  /** 获取当前 access_token 的函数 */
   getToken: () => string | null
-  /** 401 未授权时的处理回调（如跳转登录页） */
   onUnauthorized: () => void
+  refreshAccessToken?: () => Promise<string | null>
+  getGeneration?: () => number
 }
+type AuthConfig = InternalAxiosRequestConfig & { authGeneration?: number; authRetried?: boolean }
+const isAuthEndpoint = (url = '') => /\/auth\/(login|register|refresh)(?:$|\?)/.test(url)
 
 export function createApiClient(options: ApiClientOptions): AxiosInstance {
-  const instance = axios.create({
-    baseURL: options.baseURL,
-    timeout: 15000,
-    headers: { 'Content-Type': 'application/json' },
-  })
-
-  // ── 请求拦截器：自动附加 Authorization 头 ──
-  instance.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const instance = axios.create({ baseURL: options.baseURL, timeout: 15000 })
+  const generation = () => options.getGeneration?.() ?? 0
+  let refreshing: { generation: number; promise: Promise<string | null> } | null = null
+  instance.interceptors.request.use((config: AuthConfig) => {
+    if (config.authGeneration !== undefined && config.authGeneration !== generation()) throw new CanceledError('Account changed')
+    config.authGeneration = generation()
     const token = options.getToken()
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
+    if (token && !isAuthEndpoint(config.url)) config.headers.Authorization = `Bearer ${token}`
+    else delete config.headers.Authorization
     return config
   })
-
-  // ── 响应拦截器：统一错误处理 ──
-  instance.interceptors.response.use(
-    (response) => response,
-    (error: AxiosError) => {
-      if (error.response?.status === 401) {
-        options.onUnauthorized()
+  instance.interceptors.response.use(response => {
+    if ((response.config as AuthConfig).authGeneration !== generation()) throw new CanceledError('Account changed')
+    return response
+  }, async (error: AxiosError) => {
+    const config = error.config as AuthConfig | undefined
+    if (!config || isAuthEndpoint(config.url) || error.response?.status !== 401) throw error
+    const requestGeneration = config.authGeneration
+    if (requestGeneration !== generation()) throw new CanceledError('Account changed')
+    if (!config.authRetried && options.refreshAccessToken) {
+      if (!refreshing || refreshing.generation !== requestGeneration) {
+        const pending = { generation: generation(), promise: options.refreshAccessToken().catch(() => null) }
+        refreshing = pending
+        void pending.promise.finally(() => { if (refreshing === pending) refreshing = null })
       }
-      return Promise.reject(error)
-    },
-  )
-
+      const token = await refreshing.promise
+      if (requestGeneration !== generation()) throw new CanceledError('Account changed')
+      if (token) { config.authRetried = true; return instance.request(config) }
+    }
+    options.onUnauthorized()
+    throw error
+  })
   return instance
+}
+
+/** One refresh flight per identity, also shared with fetch-based streams. */
+export function createAuthClient(options: ApiClientOptions & {
+  getRefreshToken: () => string | null
+  onTokenRefreshed: (token: string) => void
+}) {
+  const raw = axios.create({ baseURL: options.baseURL, timeout: 15000 })
+  let pending: { generation: number; promise: Promise<string | null> } | null = null
+  const refreshAccessToken = (): Promise<string | null> => {
+    const generation = options.getGeneration?.() ?? 0
+    if (pending?.generation === generation) return pending.promise
+    const refresh = options.getRefreshToken()
+    if (!refresh) return Promise.resolve(null)
+    const flight = { generation, promise: raw.post('/auth/refresh', { refresh_token: refresh }).then(res => {
+      if ((options.getGeneration?.() ?? 0) !== generation) return null
+      const token: string = res.data.access_token
+      options.onTokenRefreshed(token)
+      return token
+    }).catch(() => null) }
+    pending = flight
+    void flight.promise.finally(() => { if (pending === flight) pending = null })
+    return flight.promise
+  }
+  return { client: createApiClient({ ...options, refreshAccessToken }), refreshAccessToken }
 }

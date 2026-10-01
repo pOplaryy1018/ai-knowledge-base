@@ -24,7 +24,7 @@ const failed = ref(false)
 const errorMsg = ref('')
 const totalChunks = ref(0)
 
-let eventSource: EventSource | null = null
+let eventSource: ReturnType<typeof createProgressEventSource> | null = null
 
 function connectSSE() {
   eventSource = createProgressEventSource(props.taskId)
@@ -58,11 +58,9 @@ function connectSSE() {
 
   eventSource.onerror = () => {
     if (!completed.value && !failed.value) {
-      errorMsg.value = '连接中断'
-      failed.value = true
+      stage.value = ''
+      message.value = '连接中断，正在重连并恢复任务状态...'
     }
-    closeSSE()
-    emit('done')
   }
 }
 

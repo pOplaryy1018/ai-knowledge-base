@@ -6,58 +6,13 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import type { ChatMessage, Agent, CitationItem } from '@akb/shared'
-import { setupApiClient, getApiClient } from '@/api/client'
+import { getApiClient } from '@/api/client'
 import { chatSSE } from '@/api/chat'
 import type { SSEData } from '@/api/chat'
-import router from '@/router'
-
-const TOKEN_KEY = 'akb_access_token'
-const REFRESH_KEY = 'akb_refresh_token'
+import { useUserStore } from './user'
 
 export const useChatStore = defineStore('chat', () => {
-  // ── Token 管理 ──
-  const accessToken = ref<string | null>(localStorage.getItem(TOKEN_KEY))
-  const refreshTokenValue = ref<string | null>(localStorage.getItem(REFRESH_KEY))
-
-  // ── 注入 API 客户端依赖 ──
-  setupApiClient({
-    getToken: () => accessToken.value,
-    onUnauthorized: () => {
-      clearAuth()
-      router.push('/login')
-    },
-    getRefreshToken: () => refreshTokenValue.value,
-    onTokenRefreshed: (token: string) => {
-      accessToken.value = token
-      localStorage.setItem(TOKEN_KEY, token)
-    }})
-
-  function saveToken(access: string, refresh: string) {
-    accessToken.value = access
-    refreshTokenValue.value = refresh
-    localStorage.setItem(TOKEN_KEY, access)
-    localStorage.setItem(REFRESH_KEY, refresh)
-    // 重置客户端以使用新 token
-    setupApiClient({
-      getToken: () => accessToken.value,
-      onUnauthorized: () => {
-        clearAuth()
-        router.push('/login')
-      },
-      getRefreshToken: () => refreshTokenValue.value,
-      onTokenRefreshed: (token: string) => {
-        accessToken.value = token
-        localStorage.setItem(TOKEN_KEY, token)
-      }})
-  }
-
-  function clearAuth() {
-    accessToken.value = null
-    refreshTokenValue.value = null
-    localStorage.removeItem(TOKEN_KEY)
-    localStorage.removeItem(REFRESH_KEY)
-  }
-
+  const user = useUserStore()
   // ── 状态 ──
   const agent = ref<Agent | null>(null)
   const currentConversationId = ref<string | null>(null)
@@ -68,14 +23,17 @@ export const useChatStore = defineStore('chat', () => {
   const streamingCitations = ref<CitationItem[] | null>(null)
 
   /** SSE 流控制器，用于手动停止生成 */
-  let stopRequested = false
+  let controller: AbortController | null = null
+  let requestId = 0
 
   // ── 计算属性 ──
-  const isLoggedIn = computed(() => !!accessToken.value)
+  const isLoggedIn = computed(() => user.isLoggedIn)
 
   // ── 状态清空 ──
 
   function resetChatState() {
+    stopStreaming()
+    agent.value = null
     currentConversationId.value = null
     messages.value = []
     streamingContent.value = ''
@@ -87,23 +45,28 @@ export const useChatStore = defineStore('chat', () => {
 
   /** 获取第一个（唯一）Agent 并自动进入问答 */
   async function fetchDefaultAgent() {
+    const id = requestId
     isLoading.value = true
     try {
       const { data } = await getApiClient().get<{ items: Agent[] }>('/agents', {
         params: { page: 1, size: 1 }})
+      if (id !== requestId) return null
       if (data.items && data.items.length > 0) {
         agent.value = data.items[0]
         return data.items[0]
       }
       return null
     } finally {
-      isLoading.value = false
+      if (id === requestId) isLoading.value = false
     }
   }
 
   /** 停止当前 SSE 流 */
   function stopStreaming() {
-    stopRequested = true
+    requestId++
+    controller?.abort()
+    controller = null
+    if (streamingContent.value) handleSSEEvent({ type: 'done', data: { conversation_id: currentConversationId.value || '' } })
     isStreaming.value = false
   }
 
@@ -127,23 +90,28 @@ export const useChatStore = defineStore('chat', () => {
     streamingCitations.value = null
 
     // 重置停止标志
-    stopRequested = false
+    const id = ++requestId
+    controller = new AbortController()
+    let completed = false
 
     try {
       for await (const event of chatSSE(
         agentId,
         content.trim(),
         currentConversationId.value || undefined,
-        accessToken.value || '',
+        user.accessToken || '',
+        controller.signal,
       )) {
         // 如果用户点击了停止，退出循环
-        if (stopRequested) break
+        if (id !== requestId) break
 
+        if (event.type === 'done') completed = true
         handleSSEEvent(event)
       }
     } catch (err: any) {
       // AbortError 不视为错误
-      if (err?.name !== 'AbortError') {
+      if (id === requestId && err?.name !== 'AbortError') {
+        if (streamingContent.value) handleSSEEvent({ type: 'done', data: { conversation_id: currentConversationId.value || '' } })
         const errorMessage: ChatMessage = {
           id: `error-${Date.now()}`,
           conversation_id: currentConversationId.value || '',
@@ -156,8 +124,13 @@ export const useChatStore = defineStore('chat', () => {
         Message.error(err.message || '请求失败，请重试')
       }
     } finally {
-      isStreaming.value = false
-      stopRequested = false
+      if (id === requestId) {
+        if (streamingContent.value) {
+          handleSSEEvent({ type: 'done', data: { conversation_id: currentConversationId.value || '' } })
+          if (!completed) Message.warning('连接已中断，已保留部分回答，请重试')
+        }
+        isStreaming.value = false; controller = null
+      }
     }
   }
 
@@ -213,8 +186,6 @@ export const useChatStore = defineStore('chat', () => {
 
   return {
     // 状态
-    accessToken,
-    refreshTokenValue,
     agent,
     currentConversationId,
     messages,
@@ -225,8 +196,6 @@ export const useChatStore = defineStore('chat', () => {
     // 计算
     isLoggedIn,
     // 方法
-    saveToken,
-    clearAuth,
     fetchDefaultAgent,
     sendMessage,
     stopStreaming,

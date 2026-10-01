@@ -6,6 +6,8 @@ import { ref, computed } from 'vue'
 import type { UserInfo, LoginResponse } from '@akb/shared'
 import { getApiClient, setupApiClient } from '@/api/client'
 import router from '@/router'
+import { queryClient } from '@/queryClient'
+import { useChatStore } from './chat'
 
 const TOKEN_KEY = 'akb_access_token'
 const REFRESH_KEY = 'akb_refresh_token'
@@ -15,10 +17,12 @@ export const useUserStore = defineStore('user', () => {
   const refreshTokenValue = ref<string | null>(localStorage.getItem(REFRESH_KEY))
   const userInfo = ref<UserInfo | null>(null)
   const loading = ref(false)
+  const generation = ref(0)
 
   const isLoggedIn = computed(() => !!accessToken.value)
 
   setupApiClient({
+    getGeneration: () => generation.value,
     getToken: () => accessToken.value,
     onUnauthorized: () => {
       clearAuth()
@@ -31,6 +35,7 @@ export const useUserStore = defineStore('user', () => {
     }})
 
   function saveTokens(access: string, refresh: string) {
+    clearAuth()
     accessToken.value = access
     refreshTokenValue.value = refresh
     localStorage.setItem(TOKEN_KEY, access)
@@ -38,6 +43,10 @@ export const useUserStore = defineStore('user', () => {
   }
 
   function clearAuth() {
+    generation.value++
+    void queryClient.cancelQueries()
+    queryClient.clear()
+    useChatStore().resetChatState()
     accessToken.value = null
     refreshTokenValue.value = null
     userInfo.value = null
@@ -47,18 +56,12 @@ export const useUserStore = defineStore('user', () => {
 
   async function login(username: string, password: string) {
     loading.value = true
+    const requestGeneration = generation.value
     try {
       const { data } = await getApiClient().post<LoginResponse>('/auth/login', { username, password })
+      if (requestGeneration !== generation.value) return
       saveTokens(data.access_token, data.refresh_token)
       userInfo.value = data.user
-      setupApiClient({
-        getToken: () => accessToken.value,
-        onUnauthorized: () => { clearAuth(); router.push('/login') },
-        getRefreshToken: () => refreshTokenValue.value,
-        onTokenRefreshed: (token: string) => {
-          accessToken.value = token
-          localStorage.setItem(TOKEN_KEY, token)
-        }})
       return data
     } finally {
       loading.value = false
@@ -73,17 +76,19 @@ export const useUserStore = defineStore('user', () => {
   async function fetchUser() {
     if (!accessToken.value) return
     loading.value = true
+    const requestGeneration = generation.value
     try {
       const { data } = await getApiClient().get<UserInfo>('/auth/me')
+      if (requestGeneration !== generation.value) return
       userInfo.value = data
     } catch {
-      clearAuth()
+      if (requestGeneration === generation.value) clearAuth()
     } finally {
       loading.value = false
     }
   }
 
   return {
-    accessToken, refreshTokenValue, userInfo, loading,
+    generation, accessToken, refreshTokenValue, userInfo, loading,
     isLoggedIn, login, logout, fetchUser, clearAuth}
 })

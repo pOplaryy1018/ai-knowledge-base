@@ -21,8 +21,7 @@ function onFileUploaded(taskId: string, filename: string) {
   fileRefreshTrigger.value++
 }
 
-function onTaskDone(taskId: string) {
-  importTasks.value = importTasks.value.filter(t => t.taskId !== taskId)
+function onTaskDone() {
   fileRefreshTrigger.value++
 }
 
@@ -51,6 +50,7 @@ function goBack() { router.push('/workspace/knowledge-bases') }
       :kb-id="kbId"
       :refresh-trigger="fileRefreshTrigger"
       @upload="importDialogVisible = true"
+      @retry="onFileUploaded"
     />
 
     <ImportDocumentDialog
@@ -70,7 +70,7 @@ function goBack() { router.push('/workspace/knowledge-bases') }
           :key="task.taskId"
           :task-id="task.taskId"
           :filename="task.filename"
-          @done="onTaskDone(task.taskId)"
+          @done="onTaskDone()"
           @close="onTaskClose(task.taskId)"
         />
       </div>

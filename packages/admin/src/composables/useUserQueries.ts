@@ -20,7 +20,7 @@ async function createUserApi(params: {
   role: string
 }) {
   const { getApiClient } = await import('@/api/client')
-  const { data } = await getApiClient().post('/auth/users', null, { params })
+  const { data } = await getApiClient().post('/auth/users', params)
   return data
 }
 

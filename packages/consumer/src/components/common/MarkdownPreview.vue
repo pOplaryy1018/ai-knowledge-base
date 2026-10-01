@@ -4,7 +4,7 @@
  */
 import { computed } from 'vue'
 import MarkdownIt from 'markdown-it'
-import hljs from 'highlight.js'
+import hljs from 'highlight.js/lib/common'
 import 'highlight.js/styles/github.css'
 
 const props = withDefaults(

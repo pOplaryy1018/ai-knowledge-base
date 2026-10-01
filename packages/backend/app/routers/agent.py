@@ -1,19 +1,18 @@
 """Agent 管理路由 ── CRUD"""
 
-from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, func
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func, select
 
 from app.core.db import async_session
+from app.core.security import get_current_user, require_super_admin
 from app.models.agent import Agent
 from app.models.user import User
-from app.core.security import get_current_user, require_super_admin
 from app.schemas.chat import (
     AgentCreate,
-    AgentUpdate,
-    AgentResponse,
     AgentListResponse,
+    AgentResponse,
+    AgentUpdate,
 )
 
 router: APIRouter = APIRouter(prefix="/agents", tags=["Agent 管理"])

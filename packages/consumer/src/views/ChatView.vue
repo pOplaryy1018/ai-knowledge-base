@@ -4,11 +4,11 @@
  * 自动获取唯一 Agent，支持 SSE 流式输出、Markdown 渲染、引用标注
  */
 
-import { ref, watch, nextTick, onMounted, computed } from 'vue'
+import { ref, watch, nextTick, onMounted, onUnmounted, computed } from 'vue'
 import { Message } from '@arco-design/web-vue'
 import { useChatStore } from '@/stores/chat'
 import MarkdownIt from 'markdown-it'
-import hljs from 'highlight.js'
+import hljs from 'highlight.js/lib/common'
 import 'highlight.js/styles/github.css'
 import type { ChatMessage } from '@akb/shared'
 
@@ -140,6 +140,8 @@ function formatTime(dateStr: string): string {
     month: 'short',
     day: 'numeric'})
 }
+
+onUnmounted(() => store.stopStreaming())
 
 // ── 生命周期 ──
 onMounted(async () => {

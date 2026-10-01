@@ -1,3 +1,18 @@
+x-app: &app
+  build: ./packages/backend
+  env_file:
+    - path: ./packages/backend/.env
+      required: false
+  environment:
+    ENVIRONMENT: ${APP_ENVIRONMENT:-development}
+    DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-devpassword}@postgres:5432/${POSTGRES_DB:-ai_knowledge}
+    REDIS_URL: redis://redis:6379/0
+    EMBEDDING_CACHE_DIR: /app/models
+    TESSDATA_PREFIX: /usr/share/tesseract-ocr/5/tessdata
+  volumes:
+    - uploads:/app/uploads
+    - models:/app/models
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -6,52 +21,66 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
       POSTGRES_DB: ${POSTGRES_DB:-ai_knowledge}
     ports:
-      - "15432:5432"
+      - "127.0.0.1:15432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
     restart: unless-stopped
 
   redis:
     image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redisdata:/data
     ports:
-      - "16379:6379"
+      - "127.0.0.1:16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
     restart: unless-stopped
 
-  backend:
-    build:
-      context: ./packages/backend
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
-    environment:
-      database_url: ${DATABASE_URL:-postgresql+asyncpg://admin:devpassword@postgres:5432/ai_knowledge}
-      redis_url: ${REDIS_URL:-redis://redis:6379/0}
-      jwt_secret_key: ${JWT_SECRET_KEY:-dev-secret-change-in-production}
-      TESSDATA_PREFIX: /usr/share/tesseract-ocr/5/tessdata
-    volumes:
-      - uploads:/app/uploads
+  migrate:
+    <<: *app
+    command: alembic upgrade head
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    <<: *app
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
     restart: unless-stopped
 
   worker:
-    build:
-      context: ./packages/backend
-      dockerfile: Dockerfile
+    <<: *app
     command: arq app.worker.WorkerSettings
-    environment:
-      database_url: ${DATABASE_URL:-postgresql+asyncpg://admin:devpassword@postgres:5432/ai_knowledge}
-      redis_url: ${REDIS_URL:-redis://redis:6379/0}
-      jwt_secret_key: ${JWT_SECRET_KEY:-dev-secret-change-in-production}
-      TESSDATA_PREFIX: /usr/share/tesseract-ocr/5/tessdata
-    volumes:
-      - uploads:/app/uploads
     depends_on:
-      - postgres
-      - redis
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
   pgdata:
+  redisdata:
   uploads:
+  models:

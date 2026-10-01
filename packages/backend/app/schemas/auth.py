@@ -1,6 +1,7 @@
 """认证相关 Pydantic 请求/响应模型"""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -30,6 +31,10 @@ class RegisterRequest(BaseModel):
     """用户注册请求体（默认注册为 user 角色）"""
     username: str = Field(..., min_length=3, description="用户名")
     password: str = Field(..., min_length=6, description="登录密码")
+
+
+class UserCreate(RegisterRequest):
+    role: Literal["super_admin", "user"] = "user"
 
 
 class LoginResponse(BaseModel):

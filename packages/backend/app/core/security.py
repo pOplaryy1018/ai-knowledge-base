@@ -67,12 +67,12 @@ def decode_token(token: str) -> dict[str, Any]:
             token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
         )
         return result
-    except JWTError:
+    except JWTError as error:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="令牌无效或已过期",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from error
 
 
 async def get_current_user(

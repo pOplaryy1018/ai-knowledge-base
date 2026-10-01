@@ -1,16 +1,16 @@
 """初始表结构
 
 Revision ID: b81aa7632812
-Revises: 
+Revises:
 Create Date: 2026-05-23 18:57:56.125372
 
 """
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
+from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects import postgresql
-import pgvector
 
 # revision identifiers, used by Alembic.
 revision: str = 'b81aa7632812'
@@ -73,7 +73,7 @@ def upgrade() -> None:
     sa.Column('status', sa.String(length=20), nullable=False, comment='状态：available / unavailable'),
     sa.Column('tags', postgresql.ARRAY(sa.String()), nullable=True, comment='标签列表'),
     sa.Column('source', sa.String(length=50), nullable=False, comment='来源：manual / import / agent_extract'),
-    sa.Column('embedding', pgvector.sqlalchemy.vector.VECTOR(dim=1024), nullable=True, comment='BGE-M3 向量 (1024 维)'),
+    sa.Column('embedding', Vector(dim=1024), nullable=True, comment='Embedding 向量 (1024 维)'),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='创建时间'),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False, comment='更新时间'),
     sa.ForeignKeyConstraint(['knowledge_base_id'], ['knowledge_bases.id'], ondelete='CASCADE'),

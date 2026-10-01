@@ -1,26 +1,12 @@
 /** 文档导入 API 封装 */
-import axios from 'axios'
+import { createProgressSource } from '@akb/shared'
 import type { ImportTaskResponse } from '@akb/shared'
-import { getApiClient } from './client'
+import { getApiClient, getAuthGeneration } from './client'
 
-const uploadClient = axios.create({
-  baseURL: '/api',
-  timeout: 30000,
-})
-
-uploadClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('akb_access_token')
-  if (token && config.headers) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
-})
-
-/** 上传文件，返回异步任务信息 */
 export async function uploadFile(kbId: string, file: File): Promise<ImportTaskResponse> {
   const form = new FormData()
   form.append('file', file)
-  const { data } = await uploadClient.post<ImportTaskResponse>(
+  const { data } = await getApiClient().post<ImportTaskResponse>(
     '/import/upload',
     form,
     { params: { kb_id: kbId } },
@@ -29,11 +15,8 @@ export async function uploadFile(kbId: string, file: File): Promise<ImportTaskRe
 }
 
 /** 创建 SSE EventSource 连接以监听导入进度 */
-export function createProgressEventSource(taskId: string): EventSource {
-  const token = localStorage.getItem('akb_access_token') || ''
-  return new EventSource(
-    `/api/import/${taskId}/progress?token=${encodeURIComponent(token)}`,
-  )
+export function createProgressEventSource(taskId: string) {
+  return createProgressSource(taskId, getApiClient(), getAuthGeneration)
 }
 
 // ── 文件管理 ──

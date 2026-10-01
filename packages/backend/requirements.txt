@@ -35,6 +35,9 @@ Pillow>=10.0.0
 # ── 文本切分与向量化 ──
 langchain-text-splitters>=0.3.0
 sentence-transformers>=3.3.0
+modelscope>=1.37.0
+transformers>=4.51.0
+tiktoken>=0.8.0
 
 # ── 向量存储 ──
 pgvector>=0.4.0
@@ -53,6 +56,8 @@ openai>=1.58.0
 
 # ── 中文分词 ──
 jieba>=0.42.1
+# jieba still imports pkg_resources, removed in setuptools 81+.
+setuptools>=70,<81
 
 # ── 工具 ──
 httpx>=0.28.0

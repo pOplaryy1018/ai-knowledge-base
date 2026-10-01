@@ -5,7 +5,7 @@ import { Message } from '@arco-design/web-vue'
 import { previewFile, getRawFileUrl } from '@/api/import'
 import type { KnowledgeFile, KnowledgeFilePreview } from '@akb/shared'
 import MarkdownIt from 'markdown-it'
-import hljs from 'highlight.js'
+import hljs from 'highlight.js/lib/common'
 import 'highlight.js/styles/github-dark.css'
 
 const props = defineProps<{ visible: boolean; file: KnowledgeFile | null }>()

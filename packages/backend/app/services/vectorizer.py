@@ -1,11 +1,14 @@
-"""向量化引擎 ── BGE-M3 嵌入模型 + pgvector 存储"""
+"""向量化引擎 ── 可配置嵌入模型 + pgvector 存储"""
 
+import asyncio
 import logging
 from typing import Any, Sequence
 
 import numpy as np
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.db import async_session
 from app.models.knowledge import EMBEDDING_DIM, KnowledgeItem
 from app.services.splitter import Chunk
@@ -14,38 +17,52 @@ logger = logging.getLogger(__name__)
 
 # ── 全局模型缓存 ──
 _model: Any = None
+_encoding_lock = asyncio.Lock()
+
+
+async def encode_texts(texts: Any) -> Any:
+    """Bound concurrent inference and keep synchronous model work off the API loop."""
+    async with _encoding_lock:
+        inference = asyncio.create_task(asyncio.to_thread(
+            lambda: get_model().encode(texts, normalize_embeddings=True, show_progress_bar=False)
+        ))
+        try:
+            return await asyncio.shield(inference)
+        except asyncio.CancelledError:
+            # A cancelled await cannot stop its worker thread. Keep the lock until it exits.
+            cleanup = asyncio.gather(inference, return_exceptions=True)
+            while not cleanup.done():
+                try:
+                    await asyncio.shield(cleanup)
+                except asyncio.CancelledError:
+                    continue
+            raise
 
 
 def get_model() -> Any:
-    """加载 Qwen3-Embedding-0.6B 模型（懒加载 + 全局缓存，从 ModelScope 下载到 E 盘）"""
+    """从 ModelScope 加载配置的模型，缓存到可写目录。"""
     global _model
     if _model is None:
         from sentence_transformers import SentenceTransformer
 
-        logger.info("正在从 ModelScope 下载 Qwen3-Embedding-0.6B 模型到 E 盘...")
+        logger.info("正在从 ModelScope 加载模型 %s...", settings.embedding_model)
         from modelscope import snapshot_download
 
         model_dir = snapshot_download(
-            "Qwen/Qwen3-Embedding-0.6B",
-            cache_dir="E:/ai-models",
+            settings.embedding_model,
+            cache_dir=settings.embedding_cache_dir,
         )
         logger.info("模型下载完成，正在加载到内存...")
-        _model = SentenceTransformer(model_dir, trust_remote_code=True)
-        logger.info("Qwen3-Embedding-0.6B 模型加载完成")
+        _model = SentenceTransformer(model_dir, trust_remote_code=False)
+        logger.info("Embedding 模型加载完成")
     return _model
 
 
 async def vectorize_chunks(chunks: list[Chunk]) -> list[list[float]]:
-    """将文本片段向量化（BGE-M3 1024 维）"""
-    model = get_model()
+    """将文本片段向量化并验证数据库要求的维度。"""
     texts: list[str] = [chunk.content for chunk in chunks]
 
-    # BGE-M3 可直接调用 encode 返回 1024 维向量
-    embeddings: Any = model.encode(
-        texts,
-        normalize_embeddings=True,  # 余弦相似度需归一化
-        show_progress_bar=False,
-    )
+    embeddings: Any = await encode_texts(texts)
 
     if isinstance(embeddings, np.ndarray):
         result: list[list[float]] = embeddings.tolist()
@@ -67,11 +84,19 @@ async def store_chunks(
     source: str = "file_import",
     file_id: str | None = None,
     source_metadata_base: dict[str, object] | None = None,
+    session: AsyncSession | None = None,
 ) -> int:
     """将切分后的文本片段及向量写入 knowledge_items 表"""
-    async with async_session() as session:
+    if len(chunks) != len(vectors):
+        raise ValueError("Chunk and embedding counts must match")
+    if session is None:
+        async with async_session() as owned:
+            stored_count = await store_chunks(kb_id, chunks, vectors, source, file_id, source_metadata_base, owned)
+            await owned.commit()
+            return stored_count
+    else:
         count: int = 0
-        for i, (chunk, vec) in enumerate(zip(chunks, vectors)):
+        for i, (chunk, vec) in enumerate(zip(chunks, vectors, strict=True)):
             meta: dict[str, object] = dict(source_metadata_base or {})
             meta["chunk_index"] = i
 
@@ -87,7 +112,6 @@ async def store_chunks(
             )
             session.add(item)
             count += 1
-        await session.commit()
     return count
 
 

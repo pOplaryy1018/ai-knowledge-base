@@ -85,7 +85,8 @@ router.beforeEach(async (to, _from, next) => {
   if (to.meta.roles && userStore.role) {
     const allowed = to.meta.roles as string[]
     if (!allowed.includes(userStore.role)) {
-      return next('/admin/dashboard')
+      userStore.clearAuth()
+      return next('/login')
     }
   }
 
