@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from arq import cron
 from arq.connections import RedisSettings
 from langchain_text_splitters import Language, RecursiveCharacterTextSplitter
 
@@ -12,6 +13,7 @@ from app.core.config import settings
 from app.services.file_types import CODE_EXTS
 from app.services.import_tasks import finish_import, update_task
 from app.services.parser import parse_file
+from app.services.source_jobs import process_source_import, source_maintenance
 from app.services.splitter import Chunk, split_text
 from app.services.vectorizer import encode_texts, vectorize_chunks
 
@@ -61,7 +63,8 @@ async def on_worker_startup(ctx: Any) -> None:
 
 class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
-    functions = [process_import]
+    functions = [process_import, process_source_import]
+    cron_jobs = [cron(source_maintenance, minute=set(range(60)), second=0)]
     on_startup = on_worker_startup
     max_jobs = 1
     job_timeout = 600

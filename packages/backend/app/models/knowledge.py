@@ -176,6 +176,13 @@ class KnowledgeItem(Base):
         index=True,
         comment="来源文件 ID",
     )
+    revision_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("source_revisions.id", ondelete="CASCADE"), nullable=True, index=True,
+    )
+    document_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("source_documents.id", ondelete="CASCADE"), nullable=True, index=True,
+    )
+    locator: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
     title: Mapped[str] = mapped_column(
         String(500),
         nullable=False,

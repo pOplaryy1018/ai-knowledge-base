@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     allowed_origins: list[str] = [
         "http://localhost:4173",
         "http://localhost:4174",
+        "http://localhost:54173",
+        "http://localhost:54174",
+        "http://127.0.0.1:54173",
+        "http://127.0.0.1:54174",
     ]
 
     # ── LLM ──

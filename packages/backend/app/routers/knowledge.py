@@ -18,6 +18,7 @@ from app.schemas.knowledge import (
     KnowledgeItemResponse,
 )
 from app.services.file_storage import remove_uploads
+from app.services.source_cleanup import queue_cleanup, redact_collection
 
 router: APIRouter = APIRouter(tags=["知识库管理"])
 
@@ -149,7 +150,9 @@ async def delete_knowledge_base(
             raise HTTPException(status_code=404, detail="知识库不存在")
         verify_kb_access(kb, current_user)
 
-        paths = (await session.execute(select(KnowledgeFile.file_path).where(KnowledgeFile.knowledge_base_id == kb_id))).scalars().all()
+        paths = list((await session.execute(select(KnowledgeFile.file_path).where(KnowledgeFile.knowledge_base_id == kb_id))).scalars().all())
+        paths.extend(await redact_collection(session, kb_id))
+        await queue_cleanup(session, paths)
         await session.delete(kb)
         await session.commit()
     remove_uploads(paths)

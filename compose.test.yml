@@ -1,0 +1,21 @@
+name: akb-evidence-tests
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: evidence_test
+      POSTGRES_PASSWORD: evidence_test_only
+      POSTGRES_DB: akb_evidence_test
+    ports:
+      - "127.0.0.1:25432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evidence_test -d akb_evidence_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:26379:6379"

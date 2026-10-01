@@ -56,3 +56,38 @@ async def hybrid_search(knowledge_ids: list[str], query: str, top_k: int = 5, de
                 results[item.id].score += (1 - dense_weight) / (60 + rank)
                 results[item.id].sparse_score = 1 / rank
     return sorted(results.values(), key=lambda result: (-result.score, result.item.id))[:top_k]
+
+
+async def hybrid_search_versions(versions: dict[str, str], query: str, top_k: int = 5, dense_weight: float = 0.5, *, user_id: str) -> list[SearchResult]:
+    """Retrieve only authorized immutable source/document version pairs."""
+    from sqlalchemy import and_
+
+    from app.models.source import Source, SourceDocument, SourceRevision
+
+    if not versions:
+        return []
+    vector = (await encode_texts(query)).tolist()
+    base = (select(KnowledgeItem)
+            .join(SourceDocument, KnowledgeItem.document_id == SourceDocument.id)
+            .join(SourceRevision, KnowledgeItem.revision_id == SourceRevision.id)
+            .join(Source, SourceRevision.source_id == Source.id)
+            .where(SourceDocument.revision_id == SourceRevision.id,
+                   Source.user_id == user_id, Source.archived_at.is_(None), Source.deleted_at.is_(None),
+                   SourceRevision.state == "ready", KnowledgeItem.status == "available",
+                   or_(*(and_(Source.id == source, SourceRevision.id == revision) for source, revision in versions.items()))))
+    results: dict[str, SearchResult] = {}
+    async with async_session() as session:
+        dense = await session.execute(base.add_columns((1 - KnowledgeItem.embedding.cosine_distance(vector)).label("score"))
+                                      .where(KnowledgeItem.embedding.isnot(None))
+                                      .order_by(KnowledgeItem.embedding.cosine_distance(vector), KnowledgeItem.id).limit(top_k * 3))
+        for rank, row in enumerate(dense.all(), 1):
+            results[row[0].id] = SearchResult(row[0], dense_weight / (60 + rank), dense_score=float(row[1]))
+        keywords = _extract_keywords(query)
+        if keywords:
+            matches = [or_(KnowledgeItem.title.ilike(f"%{word}%"), KnowledgeItem.content.ilike(f"%{word}%")) for word in keywords]
+            score = sum((case((match, 1), else_=0) for match in matches), start=literal(0))
+            sparse = await session.execute(base.where(or_(*matches)).order_by(score.desc(), KnowledgeItem.id).limit(top_k * 3))
+            for rank, item in enumerate(sparse.scalars().all(), 1):
+                results.setdefault(item.id, SearchResult(item, 0.0)).score += (1 - dense_weight) / (60 + rank)
+                results[item.id].sparse_score = 1 / rank
+    return sorted(results.values(), key=lambda result: (-result.score, result.item.id))[:top_k]

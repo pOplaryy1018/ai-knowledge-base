@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import Boolean, ForeignKey, String, Text, true
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -59,10 +59,10 @@ class Conversation(Base):
         default=lambda: str(uuid.uuid4()),
         comment="对话唯一标识",
     )
-    agent_id: Mapped[str] = mapped_column(
+    agent_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False),
         ForeignKey("agents.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         comment="关联 Agent ID",
     )
     user_id: Mapped[str] = mapped_column(
@@ -78,6 +78,8 @@ class Conversation(Base):
     )
     created_at: Mapped[datetime]
     updated_at: Mapped[datetime]
+
+    source_ids: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
 
     messages: Mapped[list["Message"]] = relationship(
         "Message",
@@ -121,6 +123,10 @@ class Message(Base):
         comment="引用来源列表 [{index, content, knowledge_title, score}]",
     )
     created_at: Mapped[datetime]
+
+    source_versions: Mapped[dict[str, str] | None] = mapped_column(JSONB, nullable=True)
+    question: Mapped[str | None] = mapped_column(Text, nullable=True)
+    generation_complete: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
 
     conversation: Mapped["Conversation"] = relationship(
         "Conversation",

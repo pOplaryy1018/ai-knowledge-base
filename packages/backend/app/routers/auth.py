@@ -27,6 +27,7 @@ from app.schemas.auth import (
     UserUpdate,
 )
 from app.services.file_storage import remove_uploads
+from app.services.source_cleanup import purge_user_history, queue_cleanup
 
 router: APIRouter = APIRouter(prefix="/auth", tags=["认证"])
 
@@ -249,7 +250,9 @@ async def delete_user(
             )
 
         await session.execute(select(KnowledgeBase).where(KnowledgeBase.user_id == user_id).order_by(KnowledgeBase.id).with_for_update())
-        paths = (await session.execute(select(KnowledgeFile.file_path).join(KnowledgeBase).where(or_(KnowledgeBase.user_id == user_id, KnowledgeFile.user_id == user_id)))).scalars().all()
+        paths = list((await session.execute(select(KnowledgeFile.file_path).join(KnowledgeBase).where(or_(KnowledgeBase.user_id == user_id, KnowledgeFile.user_id == user_id)))).scalars().all())
+        paths.extend(await purge_user_history(session, user_id))
+        await queue_cleanup(session, paths)
         await session.delete(user)
         await session.commit()
     remove_uploads(paths)
