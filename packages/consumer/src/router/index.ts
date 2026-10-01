@@ -11,12 +11,14 @@ const routes: RouteRecordRaw[] = [
     path: '/login',
     name: 'Login',
     component: () => import('@/views/Login.vue'),
-    meta: { title: '登录', guest: true }},
+    meta: { title: '登录', guest: true },
+  },
   {
     path: '/register',
     name: 'Register',
     component: () => import('@/views/Register.vue'),
-    meta: { title: '注册', guest: true }},
+    meta: { title: '注册', guest: true },
+  },
   {
     path: '/workspace',
     component: () => import('@/views/Layout.vue'),
@@ -27,26 +29,62 @@ const routes: RouteRecordRaw[] = [
         path: 'knowledge-bases',
         name: 'KnowledgeBaseList',
         component: () => import('@/views/knowledge/KnowledgeBaseList.vue'),
-        meta: { title: '知识库' }},
+        meta: { title: '知识库' },
+      },
       {
         path: 'knowledge-bases/:kbId',
         name: 'KnowledgeBaseDetail',
         component: () => import('@/views/knowledge/KnowledgeBaseDetail.vue'),
-        meta: { title: '知识库详情' }},
+        meta: { title: '知识库详情' },
+      },
       {
         path: 'chat',
         name: 'Chat',
         component: () => import('@/views/ChatView.vue'),
-        meta: { title: 'AI 问答' }},
-    ]},
+        meta: { title: 'Agent 问答' },
+      },
+      {
+        path: 'sources',
+        name: 'Sources',
+        component: () => import('@/views/sources/SourceWorkspace.vue'),
+        meta: { title: '资料来源' },
+      },
+      {
+        path: 'personal-chat',
+        name: 'PersonalChat',
+        component: () => import('@/views/ScopedChatView.vue'),
+        meta: { title: '个人资料问答' },
+      },
+      {
+        path: 'answers',
+        name: 'SavedAnswers',
+        component: () => import('@/views/answers/SavedAnswers.vue'),
+        meta: { title: '已保存答案' },
+      },
+      {
+        path: 'answers/:id',
+        name: 'AnswerDetail',
+        component: () => import('@/views/answers/AnswerDetail.vue'),
+        meta: { title: '答案详情' },
+      },
+      {
+        path: 'reviews/:id',
+        name: 'ReviewDetail',
+        component: () => import('@/views/answers/ReviewDetail.vue'),
+        meta: { title: '答案复核' },
+      },
+    ],
+  },
   {
     path: '/',
-    redirect: '/workspace/knowledge-bases'},
+    redirect: '/workspace/knowledge-bases',
+  },
 ]
 
 const router = createRouter({
   history: createWebHistory(),
-  routes})
+  routes,
+})
 
 router.beforeEach(async (to, _from, next) => {
   const store = useUserStore()

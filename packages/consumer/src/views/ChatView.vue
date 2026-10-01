@@ -242,7 +242,7 @@ onMounted(async () => {
                 <div class="citation-header">
                   <span class="citation-index">[{{ cit.index }}]</span>
                   <span class="citation-title">{{ cit.knowledge_title }}</span>
-                  <span class="citation-score">{{ (cit.score * 100).toFixed(1) }}%</span>
+                  <span class="citation-score">检索排序分：{{ cit.score.toFixed(4) }}</span>
                 </div>
                 <div
                   v-if="expandedCitations.has(cit.index)"

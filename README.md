@@ -75,8 +75,8 @@ docker compose up -d
 
 # 4. 启动前端开发服务器
 pnpm install
-pnpm dev:admin     # 管理后台 → http://localhost:4173
-pnpm dev:consumer  # 用户端   → http://localhost:4174
+pnpm dev:admin     # 管理后台 → http://localhost:54173
+pnpm dev:consumer  # 用户端   → http://localhost:54174
 ```
 
 ### 手动启动

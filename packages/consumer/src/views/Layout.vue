@@ -31,7 +31,28 @@ function handleLogout() {
           :class="['nav-item', { active: isActive('/workspace/chat') }]"
           @click="router.push('/workspace/chat')"
         >
-          💬 AI 问答
+          💬 Agent 问答
+        </div>
+        <div
+          :class="['nav-item', { active: isActive('/workspace/sources') }]"
+          @click="router.push('/workspace/sources')"
+        >
+          资料来源
+        </div>
+        <div
+          :class="['nav-item', { active: isActive('/workspace/personal-chat') }]"
+          @click="router.push('/workspace/personal-chat')"
+        >
+          个人资料问答
+        </div>
+        <div
+          :class="[
+            'nav-item',
+            { active: isActive('/workspace/answers') || isActive('/workspace/reviews') },
+          ]"
+          @click="router.push('/workspace/answers')"
+        >
+          已保存答案与复核
         </div>
       </nav>
 

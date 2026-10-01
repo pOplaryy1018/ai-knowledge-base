@@ -10,7 +10,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 4174,
+    port: 54174,
     host: '0.0.0.0',
     allowedHosts: ['host.docker.internal'],
     proxy: {
