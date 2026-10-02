@@ -32,7 +32,7 @@ class ValidatedImage:
     height: int
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class ImageSnapshot:
     image_hash: str
     ocr_text: str
@@ -40,8 +40,37 @@ class ImageSnapshot:
     manual_description: str
     ocr_correction: str
     raw_hash: str
-    documents: list[LocatedText]
-    manifest: dict[str, object]
+    _documents: tuple[tuple[str, str, str], ...]
+    _manifest: str
+
+    def __init__(
+        self, image_hash: str, ocr_text: str, ocr_status: OCRStatus,
+        manual_description: str, ocr_correction: str, raw_hash: str,
+        documents: list[LocatedText], manifest: dict[str, object],
+    ) -> None:
+        # Nested evidence is stored only as immutable tuples/JSON strings. Public
+        # access reconstructs ordinary list/dict values for existing consumers.
+        for name, value in (
+            ("image_hash", image_hash), ("ocr_text", ocr_text),
+            ("ocr_status", ocr_status), ("manual_description", manual_description),
+            ("ocr_correction", ocr_correction), ("raw_hash", raw_hash),
+        ):
+            object.__setattr__(self, name, value)
+        object.__setattr__(self, "_documents", tuple(
+            (doc.logical_path, doc.text, json.dumps(doc.locator, ensure_ascii=False))
+            for doc in documents
+        ))
+        object.__setattr__(self, "_manifest", json.dumps(manifest, ensure_ascii=False))
+
+    @property
+    def documents(self) -> list[LocatedText]:
+        return [LocatedText(path, text, json.loads(locator))
+                for path, text, locator in self._documents]
+
+    @property
+    def manifest(self) -> dict[str, object]:
+        result: dict[str, object] = json.loads(self._manifest)
+        return result
 
 
 def validate_image(path: str | Path) -> ValidatedImage:
@@ -131,8 +160,8 @@ def build_image_snapshot(
     # Only known, bounded metadata is retained; no paths or raw exception details.
     metadata = {
         key: value for key, value in (image_metadata or {}).items()
-        if (key == "format" and value in {"PNG", "JPEG", "WEBP"})
-        or (key in {"width", "height", "bytes"} and isinstance(value, int)
+        if (key == "format" and isinstance(value, str) and value in {"PNG", "JPEG", "WEBP"})
+        or (key in {"width", "height", "bytes"} and type(value) is int
             and 0 <= value <= MAX_IMAGE_BYTES)
     }
     manifest: dict[str, object] = {

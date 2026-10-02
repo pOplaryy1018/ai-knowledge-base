@@ -110,3 +110,28 @@ def test_original_snapshot_fields_cannot_be_reassigned(tmp_path):
     snapshot = connector.collect_image(picture(tmp_path / 'image.png'), ocr_runner=lambda img: 'text')
     with pytest.raises(FrozenInstanceError):
         snapshot.ocr_text = 'changed'
+
+
+def test_nested_snapshot_mutations_cannot_change_evidence(tmp_path):
+    from copy import deepcopy
+
+    snapshot = connector.collect_image(picture(tmp_path / 'image.png'), ocr_runner=lambda img: 'machine')
+    original_manifest = deepcopy(snapshot.manifest)
+    original_documents = deepcopy(snapshot.documents)
+    manifest = snapshot.manifest
+    manifest['ocr_text'] = 'forged'
+    manifest['channel_fingerprints']['ocr_text'] = 'forged'
+    manifest['image']['width'] = 900
+    documents = snapshot.documents
+    documents[0].locator['origin'] = 'forged'
+    documents.clear()
+    assert snapshot.manifest == original_manifest
+    assert snapshot.documents == original_documents
+
+
+def test_builder_defensively_copies_and_sanitizes_metadata(tmp_path):
+    image_hash = connector.validate_image(picture(tmp_path / 'image.png')).image_hash
+    metadata = {'format': [], 'width': True, 'height': 6, 'secret': 'private'}
+    snapshot = connector.build_image_snapshot(image_hash, ocr_text='', ocr_status='no_text', image_metadata=metadata)
+    metadata['height'] = 900
+    assert snapshot.manifest['image'] == {'height': 6}
