@@ -1,6 +1,7 @@
 """Recoverable source import jobs and impact event maintenance."""
 
 import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,8 @@ from app.services.source_publication import (
     store_revision_documents,
 )
 from app.services.vectorizer import encode_texts as encode_texts
+
+logger = logging.getLogger(__name__)
 
 
 async def mark_failed(task_id: str) -> None:
@@ -153,13 +156,21 @@ async def source_maintenance(ctx: Any) -> None:
     from app.services.source_cleanup import retry_source_cleanup
 
     async with async_session() as session:
-        rows = (await session.execute(select(SourceSyncTask).where(SourceSyncTask.status.in_(["pending", "processing"])).limit(100))).scalars().all()
-        pending = [row.id for row in rows if row.status == "pending"]
-        stale = [row.id for row in rows if row.status == "processing" and row.updated_at < datetime.now(timezone.utc) - timedelta(minutes=15)]
-    for task_id in pending:
-        await ctx["redis"].enqueue_job("process_source_import", task_id, _job_id=f"source:{task_id}")
+        pending = list((await session.execute(select(SourceSyncTask.id)
+            .where(SourceSyncTask.status == "pending")
+            .order_by(SourceSyncTask.created_at, SourceSyncTask.id).limit(100))).scalars())
+        stale = list((await session.execute(select(SourceSyncTask.id)
+            .where(SourceSyncTask.status == "processing",
+                   SourceSyncTask.updated_at < datetime.now(timezone.utc) - timedelta(minutes=15))
+            .order_by(SourceSyncTask.updated_at, SourceSyncTask.id).limit(100))).scalars())
     for task_id in stale:
         await mark_failed(task_id)
+    for task_id in pending:
+        try:
+            await ctx["redis"].enqueue_job("process_source_import", task_id, _job_id=f"source:{task_id}")
+        except Exception:
+            # The durable pending row is retried next tick; unrelated recovery must continue.
+            logger.warning("Source task enqueue failed; will retry: %s", task_id)
     await process_impact_events()
     async with async_session() as session:
         await retry_source_cleanup(session)
