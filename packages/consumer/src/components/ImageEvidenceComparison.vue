@@ -2,13 +2,13 @@
 import { onUnmounted, ref, watch } from 'vue'
 import type { EvidenceResult } from '@akb/shared'
 import { getEvidence } from '@/api/answers'
-import { createImagePreview, imageReasonLabel } from '@/utils/image-source'
+import { createImagePreview, imageReasonLabel, loadImageEvidenceSides } from '@/utils/image-source'
 import { createRequestScope } from '@/utils/request-scope'
-import { errorMessage } from '@/utils/review-state'
 const props = defineProps<{ evidence: EvidenceResult }>()
 const oldUrl = ref(''),
   currentUrl = ref(''),
-  error = ref('')
+  oldError = ref(''),
+  currentError = ref('')
 const oldPreview = createImagePreview(),
   currentPreview = createImagePreview(),
   scope = createRequestScope()
@@ -20,31 +20,15 @@ watch(
     currentPreview.dispose()
     oldUrl.value = ''
     currentUrl.value = ''
-    error.value = ''
-    if (evidence.state === 'unavailable' || !evidence.source_id) return
-    try {
-      let oldRevision = evidence.old_revision_id
-      if (!oldRevision) {
-        const original = await getEvidence(evidence.evidence_id, request.signal)
-        if (!request.isCurrent() || original.source_id !== evidence.source_id) return
-        oldRevision = original.revision_id
-      }
-      if (!request.isCurrent()) return
-      const urls = await Promise.all([
-        oldRevision ? oldPreview.load(evidence.source_id, oldRevision) : undefined,
-        evidence.current_revision_id
-          ? currentPreview.load(evidence.source_id, evidence.current_revision_id)
-          : undefined,
-      ])
-      request.apply(() => {
-        oldUrl.value = urls[0] || ''
-        currentUrl.value = urls[1] || ''
-      })
-    } catch (e) {
-      request.apply(() => {
-        error.value = errorMessage(e)
-      })
-    }
+    oldError.value = ''; currentError.value = ''
+    await loadImageEvidenceSides(evidence, request, {
+      old: (source, revision) => oldPreview.load(source, revision),
+      current: (source, revision) => currentPreview.load(source, revision),
+      lookup: getEvidence,
+    }, (side, result) => {
+      if (side === 'old') { oldUrl.value = result.url; oldError.value = result.error }
+      else { currentUrl.value = result.url; currentError.value = result.error }
+    })
   },
   { immediate: true },
 )
@@ -65,14 +49,14 @@ onUnmounted(() => {
     >
       {{ imageReasonLabel(evidence.reason) }}。请人工查看原图与引用文字。
     </a-alert>
-    <a-alert
-      v-if="error"
-      type="error"
-    >
-      原图预览不可用：{{ error }}
-    </a-alert>
     <div class="image-comparison">
       <div>
+        <a-alert
+          v-if="oldError"
+          type="error"
+        >
+          引用时原图预览不可用：{{ oldError }}
+        </a-alert>
         <strong>引用时原图</strong><img
           v-if="oldUrl"
           :src="oldUrl"
@@ -83,6 +67,12 @@ onUnmounted(() => {
         </p>
       </div>
       <div>
+        <a-alert
+          v-if="currentError"
+          type="error"
+        >
+          当前原图预览不可用：{{ currentError }}
+        </a-alert>
         <strong>当前原图</strong><img
           v-if="currentUrl"
           :src="currentUrl"

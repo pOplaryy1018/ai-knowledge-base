@@ -71,3 +71,101 @@ export function createImageDownload(
     },
   }
 }
+import { computed, ref, watch } from 'vue'
+import type { Ref } from 'vue'
+import type { Source, EvidenceResult } from '@akb/shared'
+import type { RequestTicket } from './request-scope'
+export function createImageEditorSession(
+  source: () => Pick<Source, 'id' | 'current_revision_id'>,
+  selectedRevision: Ref<string>,
+  revision: () => Pick<SourceRevision, 'id' | 'manifest'> | undefined,
+) {
+  const scope = createRequestScope(),
+    pending = ref(false),
+    description = ref(''),
+    correction = ref('')
+  const identity = computed(() =>
+    JSON.stringify([source().id, source().current_revision_id, selectedRevision.value]),
+  )
+  let hydrated = false
+  const stopIdentity = watch(
+    identity,
+    () => {
+      scope.dispose()
+      pending.value = false
+      hydrated = false
+      description.value = ''
+      correction.value = ''
+    },
+    { flush: 'sync' },
+  )
+  const stopHydrate = watch(
+    () => [identity.value, revision()],
+    () => {
+      const item = revision()
+      if (hydrated || !item || item.id !== selectedRevision.value) return
+      description.value = item.manifest?.manual_description || ''
+      correction.value = item.manifest?.ocr_correction || ''
+      hydrated = true
+    },
+    { immediate: true, flush: 'sync' },
+  )
+  return {
+    pending,
+    description,
+    correction,
+    async run<T>(
+      action: (signal: AbortSignal) => Promise<T>,
+      onSuccess: (value: T) => void,
+      onError: (message: string) => void,
+    ) {
+      const request = scope.begin(identity.value)
+      pending.value = true
+      try {
+        const result = await action(request.signal)
+        request.apply(() => onSuccess(result))
+      } catch (e) {
+        request.apply(() => onError(errorMessage(e)))
+      } finally {
+        request.apply(() => {
+          pending.value = false
+        })
+      }
+    },
+    dispose() {
+      stopIdentity()
+      stopHydrate()
+      scope.dispose()
+      pending.value = false
+    },
+  }
+}
+export async function loadImageEvidenceSides(
+  evidence: EvidenceResult,
+  request: RequestTicket,
+  loaders: {
+    old: (source: string, revision: string) => Promise<string | undefined>
+    current: (source: string, revision: string) => Promise<string | undefined>
+    lookup: (id: string, signal: AbortSignal) => Promise<{ source_id: string; revision_id: string }>
+  },
+  update: (side: 'old' | 'current', result: { url: string; error: string }) => void,
+) {
+  if (evidence.state === 'unavailable' || !evidence.source_id) return
+  async function loadSide(side: 'old' | 'current') {
+    try {
+      let revision = side === 'old' ? evidence.old_revision_id : evidence.current_revision_id
+      if (side === 'old' && !revision) {
+        const original = await loaders.lookup(evidence.evidence_id, request.signal)
+        if (!request.isCurrent()) return
+        if (original.source_id !== evidence.source_id) throw new Error('引用原件来源不匹配')
+        revision = original.revision_id
+      }
+      if (!revision || !request.isCurrent()) return
+      const url = await loaders[side](evidence.source_id, revision)
+      request.apply(() => update(side, { url: url || '', error: '' }))
+    } catch (e) {
+      request.apply(() => update(side, { url: '', error: errorMessage(e) }))
+    }
+  }
+  await Promise.allSettled([loadSide('old'), loadSide('current')])
+}

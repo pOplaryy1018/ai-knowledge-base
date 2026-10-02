@@ -121,3 +121,88 @@ it('cancels downloads and suppresses navigation-stale errors while preserving cu
   await current
   expect(onError).toHaveBeenCalledWith('current failure')
 })
+it('keeps pending mutations and unsaved editors intact across same immutable version refreshes', async () => {
+  const { ref } = await import('vue')
+  const { createImageEditorSession } = await import('./image-source')
+  const source = ref({ id: 's', current_revision_id: 'r1' })
+  const selected = ref('r1')
+  const revision = ref({
+    id: 'r1',
+    manifest: { manual_description: 'saved', ocr_correction: 'saved correction' },
+  })
+  const editor = createImageEditorSession(
+    () => source.value,
+    selected,
+    () => revision.value,
+  )
+  editor.description.value = 'unsaved description'
+  editor.correction.value = 'unsaved correction'
+  let finish!: (value: string) => void
+  const accepted = vi.fn(),
+    onError = vi.fn()
+  const running = editor.run(
+    () =>
+      new Promise<string>((resolve) => {
+        finish = resolve
+      }),
+    accepted,
+    onError,
+  )
+  source.value = { ...source.value }
+  revision.value = { ...revision.value, manifest: { ...revision.value.manifest } }
+  expect(editor.pending.value).toBe(true)
+  expect(editor.description.value).toBe('unsaved description')
+  expect(editor.correction.value).toBe('unsaved correction')
+  finish('published')
+  await running
+  expect(editor.pending.value).toBe(false)
+  expect(accepted).toHaveBeenCalledWith('published')
+  let finishOld!: (value: string) => void
+  const old = editor.run(
+    () =>
+      new Promise<string>((resolve) => {
+        finishOld = resolve
+      }),
+    accepted,
+    onError,
+  )
+  selected.value = 'historical'
+  expect(editor.pending.value).toBe(false)
+  finishOld('stale')
+  await old
+  expect(accepted).not.toHaveBeenCalledWith('stale')
+  editor.dispose()
+})
+it.each(['original', 'metadata'])(
+  'displays current evidence image when old %s fails',
+  async (failure) => {
+    const { loadImageEvidenceSides } = await import('./image-source')
+    const { createRequestScope } = await import('./request-scope')
+    const oldLoad = vi.fn().mockRejectedValue(new Error('old original missing'))
+    const currentLoad = vi.fn().mockResolvedValue('blob:current')
+    const lookup = vi.fn().mockRejectedValue(new Error('old metadata missing'))
+    const updates = vi.fn()
+    await loadImageEvidenceSides(
+      {
+        evidence_id: 'e',
+        source_id: 's',
+        state: 'changed',
+        old_text: 'quote',
+        old_locator: {},
+      locator: null,
+        current_text: null,
+        current_revision_id: 'current',
+        ...(failure === 'original' ? { old_revision_id: 'old' } : {}),
+      },
+      createRequestScope().begin('e'),
+      { old: oldLoad, current: currentLoad, lookup },
+      updates,
+    )
+    expect(currentLoad).toHaveBeenCalledWith('s', 'current')
+    expect(updates).toHaveBeenCalledWith('current', { url: 'blob:current', error: '' })
+    expect(updates).toHaveBeenCalledWith('old', {
+      url: '',
+      error: failure === 'original' ? 'old original missing' : 'old metadata missing',
+    })
+  },
+)

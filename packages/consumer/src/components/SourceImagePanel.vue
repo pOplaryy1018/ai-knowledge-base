@@ -6,33 +6,30 @@ import {
   updateImageText,
   reextractImage,
 } from '@/api/sources'
-import { createImageDownload, createImagePreview, imageStatusLabel } from '@/utils/image-source'
+import { createImageDownload, createImageEditorSession, createImagePreview, imageStatusLabel } from '@/utils/image-source'
 import { createRequestScope } from '@/utils/request-scope'
 import { errorMessage, versionLabel } from '@/utils/review-state'
 const props = defineProps<{ source: Source; revisions: SourceRevision[]; busy: boolean }>()
 const emit = defineEmits<{ task: [task: SourceTask]; refresh: [] }>()
 const revisionId = ref(''),
-  description = ref(''),
-  correction = ref(''),
   uploadDescription = ref('')
 const file = ref<File>(),
   previewUrl = ref(''),
   error = ref(''),
-  pending = ref(false),
   uploadInput = ref<HTMLInputElement>()
 const preview = createImagePreview(),
   imageDownload = createImageDownload(),
-  scope = createRequestScope()
+  previewScope = createRequestScope()
 const revision = computed(() => props.revisions.find((item) => item.id === revisionId.value))
+const editor = createImageEditorSession(() => props.source, revisionId, () => revision.value)
+const { pending, description, correction } = editor
 const historical = computed(() => revisionId.value !== props.source.current_revision_id)
 const disabled = computed(
   () => props.busy || pending.value || !!props.source.archived_at || !!props.source.active_task_id,
 )
 watch(
-  () => [props.source.id, props.source.current_revision_id],
+  () => JSON.stringify([props.source.id, props.source.current_revision_id]),
   () => {
-    scope.begin(props.source.id)
-    pending.value = false
     error.value = ''
     file.value = undefined
     uploadDescription.value = ''
@@ -41,15 +38,13 @@ watch(
   { immediate: true },
 )
 watch(
-  () => [props.source.id, revisionId.value, revision.value],
+  () => JSON.stringify([props.source.id, revisionId.value]),
   async () => {
-    const request = scope.begin(`${props.source.id}/${revisionId.value}`)
+    const request = previewScope.begin(`${props.source.id}/${revisionId.value}`)
     imageDownload.dispose()
     preview.dispose()
     previewUrl.value = ''
     error.value = ''
-    description.value = revision.value?.manifest?.manual_description || ''
-    correction.value = revision.value?.manifest?.ocr_correction || ''
     if (!revisionId.value) return
     try {
       const url = await preview.load(props.source.id, revisionId.value)
@@ -70,27 +65,15 @@ function choose(event: Event) {
 }
 async function mutate(action: (signal: AbortSignal) => Promise<SourceTask>) {
   if (disabled.value) return
-  const request = scope.begin(`${props.source.id}/${revisionId.value}`)
-  pending.value = true
   error.value = ''
-  try {
-    const task = await action(request.signal)
-    request.apply(() => {
-      file.value = undefined
-      if (uploadInput.value) uploadInput.value.value = ''
-      uploadDescription.value = ''
-      emit('task', task)
-    })
-  } catch (e) {
-    request.apply(() => {
-      error.value = errorMessage(e)
-    })
-  } finally {
-    request.apply(() => {
-      pending.value = false
-    })
-  }
+  await editor.run(action, task => {
+    file.value = undefined
+    if (uploadInput.value) uploadInput.value.value = ''
+    uploadDescription.value = ''
+    emit('task', task)
+  }, message => { error.value = message })
 }
+
 function upload() {
   const selectedFile = file.value,
     source = props.source
@@ -116,7 +99,8 @@ function reextract() {
 onUnmounted(() => {
   imageDownload.dispose()
   preview.dispose()
-  scope.dispose()
+  editor.dispose()
+  previewScope.dispose()
 })
 </script>
 <template>
