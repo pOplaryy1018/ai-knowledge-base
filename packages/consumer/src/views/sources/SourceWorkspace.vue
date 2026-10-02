@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import SourceImagePanel from '@/components/SourceImagePanel.vue'
+import type { SourceTask } from '@akb/shared'
 import type { Source, SourceRevision, SourceDocument } from '@akb/shared'
 import { getApiClient } from '@/api/client'
 import {
@@ -46,6 +48,7 @@ const validCreation = computed(
     name.value.trim() &&
     kb.value &&
     (kind.value === 'document' ||
+      kind.value === 'image' ||
       (kind.value === 'git_local'
         ? rootId.value && relativePath.value.trim()
         : /^https:\/\/github\.com\/[^/]+\/[^/]+\/?$/.test(publicUrl.value.trim()))),
@@ -199,8 +202,10 @@ async function create() {
         ? { root_id: rootId.value, relative_path: relativePath.value.trim() }
         : kind.value === 'git_public'
           ? { url: publicUrl.value.trim() }
-          : undefined
-    if (config)
+          : kind.value === 'image'
+            ? {}
+            : undefined
+    if (config && kind.value !== 'image')
       Object.assign(config, {
         include_paths: includePaths.value
           .split(/[\n,]/)
@@ -220,7 +225,10 @@ async function saveScope() {
   const source = selected.value
   if (!source) return
   const request = scopeEditRequest.begin(source.id)
-  const paths = scopePaths.value.split(/[\n,]/).map(path => path.trim()).filter(Boolean)
+  const paths = scopePaths.value
+    .split(/[\n,]/)
+    .map((path) => path.trim())
+    .filter(Boolean)
   await act(async () => {
     try {
       await updateSourceScope(source.id, paths, request.signal)
@@ -229,14 +237,26 @@ async function saveScope() {
       request.apply(() => {
         if (selected.value?.id !== source.id) return
         sources.value = items
-        selected.value = items.find(item => item.id === source.id) || source
+        selected.value = items.find((item) => item.id === source.id) || source
         scopePaths.value = (selected.value.config?.include_paths || []).join(', ')
         status.value = '采集范围已保存，需手动同步后发布新版本。'
       })
     } catch (e) {
-      request.apply(() => { error.value = errorMessage(e) })
+      request.apply(() => {
+        error.value = errorMessage(e)
+      })
     }
   })
+}
+async function imageTask(task: SourceTask) {
+  const source = sources.value.find((item) => item.id === task.source_id)
+  if (source && task.task_id) source.active_task_id = task.task_id
+  if (selected.value?.id === task.source_id) {
+    if (task.task_id) selected.value.active_task_id = task.task_id
+    status.value = syncLabel(task.status)
+  }
+  if (task.task_id) await poll(task.task_id)
+  else await refresh()
 }
 async function manualSync() {
   const source = selected.value
@@ -315,7 +335,9 @@ onUnmounted(() => {
         v-model="kind"
         style="width: 180px"
       >
-        <a-option value="document">
+        <a-option value="image">
+          图片
+        </a-option><a-option value="document">
           文档
         </a-option><a-option value="git_local">
           本地仓库
@@ -348,7 +370,7 @@ onUnmounted(() => {
         placeholder="https://github.com/owner/repo"
       />
       <a-input
-        v-if="kind !== 'document'"
+        v-if="kind === 'git_local' || kind === 'git_public'"
         v-model="includePaths"
         placeholder="可选：限定路径，以逗号分隔"
       />
@@ -390,21 +412,26 @@ onUnmounted(() => {
       >
         <p>
           {{
-            selected.kind === 'document'
-              ? '文档'
-              : selected.kind === 'git_local'
-                ? '本地仓库'
-                : '公开仓库'
+            selected.kind === 'image'
+              ? '图片'
+              : selected.kind === 'document'
+                ? '文档'
+                : selected.kind === 'git_local'
+                  ? '本地仓库'
+                  : '公开仓库'
           }}
           · {{ selected.config?.relative_path || selected.config?.url || '' }}
         </p>
         <a-alert
-          v-if="selected.kind !== 'document' && selected.last_sync_manifest?.dirty"
+          v-if="
+            (selected.kind === 'git_local' || selected.kind === 'git_public') &&
+              selected.last_sync_manifest?.dirty
+          "
           type="warning"
         >
           最近同步检测到未提交修改；采集只包含已提交内容。
         </a-alert>
-        <a-space v-if="selected.kind !== 'document'">
+        <a-space v-if="selected.kind === 'git_local' || selected.kind === 'git_public'">
           <a-input
             v-model="scopePaths"
             placeholder="调整采集范围，逗号分隔；留空采集整个仓库"
@@ -426,7 +453,7 @@ onUnmounted(() => {
             @change="upload"
           >
           <a-button
-            v-if="selected.kind !== 'document'"
+            v-if="selected.kind === 'git_local' || selected.kind === 'git_public'"
             :disabled="!!selected.archived_at || busy || !!selected.active_task_id"
             @click="manualSync"
           >
@@ -441,7 +468,7 @@ onUnmounted(() => {
               })
             "
           >
-            <a-button :disabled="!!selected.archived_at || busy">
+            <a-button :disabled="!!selected.archived_at || busy || !!selected.active_task_id">
               归档
             </a-button>
           </a-popconfirm>
@@ -449,12 +476,23 @@ onUnmounted(() => {
           同步状态：{{ status }}
         </a-alert>
         <a-alert
-          v-if="selected.kind !== 'document' && selected.last_sync_manifest?.dirty"
+          v-if="
+            (selected.kind === 'git_local' || selected.kind === 'git_public') &&
+              selected.last_sync_manifest?.dirty
+          "
           type="warning"
         >
           最近一次同步检测到未提交修改；已发布版本只包含已提交内容。
         </a-alert>
-        <a-list>
+        <SourceImagePanel
+          v-if="selected.kind === 'image'"
+          :source="selected"
+          :revisions="revisions"
+          :busy="busy"
+          @task="imageTask"
+          @refresh="act(refresh)"
+        />
+        <a-list v-if="selected.kind !== 'image'">
           <a-list-item
             v-for="revision in revisionRows"
             :key="revision.id"
@@ -470,7 +508,7 @@ onUnmounted(() => {
                   下载原件
                 </a-button>
               <a-button
-                v-if="selected.kind !== 'document'"
+                v-if="selected.kind === 'git_local' || selected.kind === 'git_public'"
                 @click="act(() => browse(revision))"
               >
                 查看版本文件

@@ -8,6 +8,8 @@ export interface EvidenceResult {
   old_locator: Record<string, unknown>
   current_text: string | null
   locator: Record<string, unknown> | null
+  old_revision_id?: string
+  reason?: string
   current_revision_id?: string
 }
 export interface AnswerVersion {

@@ -41,6 +41,13 @@ export function evidenceStateLabel(state: string) {
 export function formatLocator(locator: Record<string, unknown> | null) {
   if (!locator) return '位置不可用'
   const labels: string[] = []
+  const origins: Record<string, string> = {
+    image_ocr: '图片OCR',
+    image_ocr_correction: '人工OCR校正',
+    manual_description: '人工描述',
+  }
+  if (typeof locator.origin === 'string' && origins[locator.origin])
+    labels.push(origins[locator.origin])
   if (typeof locator.commit === 'string') {
     labels.push(locator.commit)
     if (typeof locator.logical_path === 'string') labels.push(locator.logical_path)
@@ -53,6 +60,8 @@ export function formatLocator(locator: Record<string, unknown> | null) {
         ? `第${locator.line_start}–${locator.line_end}行`
         : `第${locator.line_start}行`,
     )
+  if (typeof locator.char_start === 'number' && typeof locator.char_end === 'number')
+    labels.push(`字符 ${locator.char_start}–${locator.char_end}`)
   return labels.join(' · ') || '原件中的引用片段'
 }
 export function versionLabel(id: string | undefined) {

@@ -98,5 +98,61 @@ export async function getRevisionDocument(
   ).data.content
 }
 export async function updateSourceScope(id: string, includePaths: string[], signal?: AbortSignal) {
-  return (await getApiClient().patch<Source>(`/sources/${id}/scope`, { include_paths: includePaths }, { signal })).data
+  return (
+    await getApiClient().patch<Source>(
+      `/sources/${id}/scope`,
+      { include_paths: includePaths },
+      { signal },
+    )
+  ).data
+}
+export async function uploadImageRevision(
+  id: string,
+  file: File,
+  manualDescription = '',
+  expectedRevisionId?: string,
+  signal?: AbortSignal,
+) {
+  const body = new FormData()
+  body.append('file', file)
+  body.append('manual_description', manualDescription)
+  if (expectedRevisionId) body.append('expected_revision_id', expectedRevisionId)
+  return (await getApiClient().post<SourceTask>(`/sources/${id}/image-revisions`, body, { signal }))
+    .data
+}
+export async function updateImageText(
+  id: string,
+  expectedRevisionId: string,
+  manualDescription: string,
+  ocrCorrection: string,
+  signal?: AbortSignal,
+) {
+  return (
+    await getApiClient().patch<SourceTask>(
+      `/sources/${id}/image-text`,
+      {
+        expected_revision_id: expectedRevisionId,
+        manual_description: manualDescription,
+        ocr_correction: ocrCorrection,
+      },
+      { signal },
+    )
+  ).data
+}
+export async function reextractImage(id: string, expectedRevisionId: string, signal?: AbortSignal) {
+  return (
+    await getApiClient().post<SourceTask>(
+      `/sources/${id}/image-reextract`,
+      { expected_revision_id: expectedRevisionId },
+      { signal },
+    )
+  ).data
+}
+export async function getOriginalBlob(source: string, revision: string, signal?: AbortSignal) {
+  return (
+    await getApiClient().get<Blob>(`/sources/${source}/revisions/${revision}/original`, {
+      responseType: 'blob',
+      signal,
+    })
+  ).data
 }

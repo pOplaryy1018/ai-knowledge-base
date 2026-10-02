@@ -3,7 +3,7 @@ export interface Source {
   id: string
   knowledge_base_id: string
   name: string
-  kind: 'document' | 'git_local' | 'git_public'
+  kind: 'document' | 'image' | 'git_local' | 'git_public'
   config?: { root_id?: string; relative_path?: string; url?: string; include_paths?: string[] }
   current_revision_id: string | null
   active_task_id: string | null
@@ -13,6 +13,14 @@ export interface SourceRevision {
   id: string
   commit?: string | null
   manifest?: {
+    image_hash?: string
+    ocr_text?: string
+    ocr_status?: 'completed' | 'no_text' | 'unavailable'
+    manual_description?: string
+    ocr_correction?: string
+    channel_fingerprints?: Record<string, string>
+    image?: { format: string; width: number; height: number; bytes: number }
+    needs_description?: boolean
     included_count?: number
     stats?: { candidates: number; included: number; skipped: number; text_bytes: number }
     complete?: boolean

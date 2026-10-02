@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onUnmounted, ref, watch } from 'vue'
+import ImageEvidenceComparison from '@/components/ImageEvidenceComparison.vue'
 import { useRoute } from 'vue-router'
 import type { SavedAnswer, AnswerCandidate, EvidenceResult } from '@akb/shared'
 import { getAnswer, generateCandidate, acceptCandidate, getEvidence } from '@/api/answers'
@@ -111,6 +112,15 @@ onUnmounted(() => scope.dispose())
           direction="vertical"
           fill
         >
+          <ImageEvidenceComparison
+            v-if="
+              evidence.old_locator?.image_hash ||
+                String(evidence.old_locator?.origin || '').startsWith('image_') ||
+                evidence.old_locator?.origin === 'manual_description' ||
+                evidence.reason?.startsWith('image_')
+            "
+            :evidence="evidence"
+          />
           <strong>引用时原文</strong>
           <p>{{ evidence.old_text || '不可用' }}</p>
           <pre>{{ formatLocator(evidence.old_locator) }}</pre>
