@@ -98,6 +98,22 @@ async def test_inaccessible_image_does_not_leak_quote_or_locator(lifecycle_clien
     assert result["old_text"] is None and result["old_locator"] == {}
 
 
+@pytest.mark.parametrize("forged", ["absent_channel", "quote_mismatch"])
+async def test_old_image_channel_must_support_original_quote(
+    lifecycle_client, db_session, monkeypatch, forged
+):
+    client, user, kb = lifecycle_client
+    _, _, evidence = await image_evidence(client, kb, db_session, monkeypatch)
+    row = evidence["image_ocr"]
+    if forged == "absent_channel":
+        row.locator.update(origin="image_ocr_correction", logical_path="ocr_correction")
+    else:
+        row.quote = "not present in original OCR"
+    result = await inspect_evidence(db_session, row, user.id)
+    assert result["state"] == "unavailable"
+    assert result["reason"] == "image_untracked"
+
+
 @pytest.mark.parametrize("origin,label", [("image_ocr", "图片OCR"), ("image_ocr_correction", "人工OCR校正"), ("manual_description", "人工描述")])
 def test_image_prompt_labels_origin(origin, label):
     prompt = evidence_prompt([{"index": 1, "knowledge_title": "photo", "content": "text", "locator": {"origin": origin}}])

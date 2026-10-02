@@ -40,6 +40,9 @@ async def inspect_evidence(session: AsyncSession, evidence: AnswerEvidence, user
                 or current is None or current.source_id != source.id
                 or not isinstance(current_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", current_hash)):
             return {**result, "state": "unavailable", "reason": "image_untracked", "current_text": None, "locator": None}
+        old_text = old.manifest.get(channel_paths[origin])
+        if not isinstance(old_text, str) or not old_text or evidence.quote not in old_text:
+            return {**result, "state": "unavailable", "reason": "image_untracked", "current_text": None, "locator": None}
         matching = [row for row in matching if row.locator.get("origin") == origin]
         documents = [LocatedText(row.logical_path, row.text, row.locator) for row in matching]
         match = match_evidence(evidence.quote, documents, evidence.locator)
