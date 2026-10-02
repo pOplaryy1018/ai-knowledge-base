@@ -35,7 +35,7 @@ def document_chunks(documents: list[LocatedText]) -> list[LocatedText]:
 async def store_revision_documents(session: AsyncSession, source: Source, revision: SourceRevision,
                                    documents: list[LocatedText], vectors: list[list[float]]) -> None:
     chunks = document_chunks(documents)
-    if not chunks or len(chunks) != len(vectors) or any(len(v) != 1024 for v in vectors):
+    if (not chunks and source.kind != "image") or len(chunks) != len(vectors) or any(len(v) != 1024 for v in vectors):
         raise ValueError("Nonempty chunks and 1024-dimensional embeddings are required")
     if revision.state != "staging" or source.knowledge_base_id is None:
         raise HTTPException(409, "版本不可写入")

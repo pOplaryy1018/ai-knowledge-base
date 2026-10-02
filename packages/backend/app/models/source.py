@@ -66,6 +66,7 @@ class SourceSyncTask(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending")
     stage: Mapped[str] = mapped_column(String(30), default="pending")
     error: Mapped[str | None] = mapped_column(Text)
+    payload: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
     active_token: Mapped[str] = mapped_column(String(100), default=lambda: str(uuid.uuid4()))
 
 

@@ -35,7 +35,7 @@ def local_repository(config: dict[str, Any], user_id: str) -> tuple[Path, list[P
 
 
 def source_config(kind: str, config: dict[str, Any], user_id: str) -> dict[str, Any]:
-    if kind == "document":
+    if kind in {"document", "image"}:
         if config:
             raise ValueError("文档来源不接受仓库配置")
         return {}

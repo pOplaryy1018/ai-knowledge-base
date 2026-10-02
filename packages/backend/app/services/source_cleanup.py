@@ -40,6 +40,10 @@ async def redact_source(session: AsyncSession, source_id: str) -> list[str]:
     revisions = (await session.execute(select(SourceRevision).where(SourceRevision.source_id == source_id))).scalars().all()
     ids = [revision.id for revision in revisions]
     paths = [revision.file_path for revision in revisions if revision.file_path]
+    tasks = (await session.execute(select(SourceSyncTask).where(SourceSyncTask.source_id == source_id))).scalars().all()
+    paths.extend(str(task.payload["file_path"]) for task in tasks if task.payload.get("file_path"))
+    for task in tasks:
+        task.payload = {}
     await queue_cleanup(session, paths)
     await session.execute(update(SourceSyncTask).where(SourceSyncTask.source_id == source_id, SourceSyncTask.status.in_(["pending", "processing"]))
                           .values(status="failed", stage="deleted", error="资料来源已删除"))

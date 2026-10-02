@@ -7,17 +7,17 @@ from typing import Any
 
 from sqlalchemy import select
 
-from app.core.db import async_session
+from app.core.db import async_session as async_session
 from app.models.knowledge import KnowledgeBase
 from app.models.source import Source, SourceRevision, SourceSyncTask
-from app.services.impact_service import process_impact_events
+from app.services.impact_service import process_impact_events as process_impact_events
 from app.services.source_extraction import extract_documents
 from app.services.source_publication import (
     document_chunks,
     publish_revision,
     store_revision_documents,
 )
-from app.services.vectorizer import encode_texts
+from app.services.vectorizer import encode_texts as encode_texts
 
 
 async def mark_failed(task_id: str) -> None:
@@ -38,6 +38,13 @@ async def mark_failed(task_id: str) -> None:
 
 
 async def process_source_import(ctx: Any, task_id: str) -> dict[str, str]:
+    async with async_session() as image_session:
+        image_task = await image_session.get(SourceSyncTask, task_id)
+        image_source = await image_session.get(Source, image_task.source_id) if image_task else None
+        is_image = image_source is not None and image_source.kind == "image"
+    if is_image:
+        from app.services.image_source_jobs import process_image_import
+        return await process_image_import(ctx, task_id)
     async with async_session() as session:
         task = await session.get(SourceSyncTask, task_id)
         if task is None:

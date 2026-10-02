@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.answer_api import router as answer_router
 from app.api.health import router as health_router
+from app.api.image_source_api import router as image_source_router
 from app.api.import_api import router as import_router
 from app.api.scoped_chat_api import router as scoped_chat_router
 from app.api.source_api import router as source_router
@@ -61,6 +62,7 @@ app.include_router(chat_router, prefix="/api")
 app.include_router(file_router, prefix="/api")
 app.include_router(statistics_router, prefix="/api")
 app.include_router(source_router, prefix="/api")
+app.include_router(image_source_router, prefix="/api")
 app.include_router(answer_router, prefix="/api")
 app.include_router(scoped_chat_router, prefix="/api")
 

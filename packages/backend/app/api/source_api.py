@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.db import async_session
+from app.core.db import async_session as async_session
 from app.core.security import get_current_user
 from app.models.knowledge import KnowledgeBase
 from app.models.source import Source, SourceRevision, SourceSyncTask
@@ -28,7 +28,7 @@ DOCUMENT_EXTS = {".md", ".markdown", ".txt", ".text", ".pdf", ".docx", ".doc"}
 async def owned_source(session: AsyncSession, source_id: str, user_id: str, *, lock: bool = False) -> Source:
     statement = select(Source).where(Source.id == source_id, Source.user_id == user_id, Source.deleted_at.is_(None))
     if lock:
-        statement = statement.with_for_update()
+        statement = statement.with_for_update().execution_options(populate_existing=True)
     row = (await session.execute(statement)).scalar_one_or_none()
     if row is None:
         raise HTTPException(404, "资料来源不存在")
@@ -246,7 +246,7 @@ async def revision_document(source_id: uuid.UUID, revision_id: uuid.UUID, docume
 @router.get("/sources/{source_id}/revisions/{revision_id}/original")
 async def revision_original(source_id: uuid.UUID, revision_id: uuid.UUID, user: User = Depends(get_current_user)) -> Response:
     async with async_session() as session:
-        await owned_source(session, str(source_id), user.id)
+        source = await owned_source(session, str(source_id), user.id)
         revision = await session.get(SourceRevision, str(revision_id))
         if revision is None or revision.source_id != str(source_id):
             raise HTTPException(404, "原件不可用")
@@ -266,6 +266,8 @@ async def revision_original(source_id: uuid.UUID, revision_id: uuid.UUID, user: 
             raise HTTPException(404, "原件不可用")
         path = Path(revision.file_path).resolve()
         if not path.is_relative_to(SOURCE_ROOT.resolve()) or not path.is_file():
+            raise HTTPException(404, "原件不可用")
+        if source.kind == "image" and not path.is_relative_to((SOURCE_ROOT / source.id).resolve()):
             raise HTTPException(404, "原件不可用")
         return FileResponse(path, filename=revision.filename or path.name, content_disposition_type="attachment")
 

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 class SourceCreate(BaseModel):
     knowledge_base_id: UUID
     name: str = Field(min_length=1, max_length=500)
-    kind: Literal["document", "git_local", "git_public"] = "document"
+    kind: Literal["document", "image", "git_local", "git_public"] = "document"
     config: dict[str, Any] = Field(default_factory=dict)
 
 
