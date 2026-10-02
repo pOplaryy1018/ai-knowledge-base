@@ -33,27 +33,25 @@ Files: packages/backend/app/services/source_jobs.py; source_publication.py; sour
 
 ## Task 4: 图片证据复核
 Files: packages/backend/app/services/impact_service.py; scoped_chat_service.py; tests/integration/test_image_sources.py.
-- [ ] 增加不同图相同 OCR 必 changed/image_changed、同图描述修改只影响 manual_description、渠道删除 missing、未知指纹不可追踪、混合引用测试。
-- [ ] 运行 pytest 确认旧比较逻辑失败。
-- [ ] 图指纹变化优先；同图仅匹配对应 origin/logical_path；引用元数据明确 OCR/人工描述/人工校正，保留原来的精确引文校验。
-- [ ] 目标及文档/Git 回归通过，提交。
+- [x] 增加不同图相同 OCR 必 changed/image_changed、同图描述修改只影响 manual_description、渠道删除 missing、未知指纹不可追踪、混合引用测试。
+- [x] 运行 pytest 确认旧比较逻辑失败。
+- [x] 图指纹变化优先；同图仅匹配对应 origin/logical_path；引用元数据明确 OCR/人工描述/人工校正，保留原来的精确引文校验。
+- [x] 目标及文档/Git 回归通过，提交。
 
 ## Task 5: 图片界面
 Files: packages/shared/src (source types/API); packages/consumer/src/views/sources/SourceWorkspace.vue; saved answer/review components and locator formatter; frontend tests.
-- [ ] 增加认证 Blob 加载释放、版本切换丢弃过期响应、渠道标签、编辑冲突的测试，执行 `pnpm test` 确认失败。
-- [ ] 实现图片创建与更新、原图历史预览、OCR只读、校正和描述编辑、手动重提取；复核显示旧新原图与变化原因，支持现有候选采纳。
-- [ ] Vitest、typecheck、build、lint 通过并提交。
+- [x] 增加认证 Blob 加载释放、版本切换丢弃过期响应、渠道标签、编辑冲突的测试，执行 `pnpm test` 确认失败。
+- [x] 实现图片创建与更新、原图历史预览、OCR只读、校正和描述编辑、手动重提取；复核显示旧新原图与变化原因，支持现有候选采纳。
+- [x] Vitest、typecheck、build、lint 通过并提交。
 
 ## Task 6: 集成验收
-- [ ] 全量真实 PG pytest；Ruff、Mypy；全量 pnpm test/typecheck/build/lint。
-- [ ] 隔离数据库迁移升级降级升级、备份恢复，禁止操作业务库。
-- [ ] 浏览器上传空 OCR 图→补充描述→与代码联合问答→保存答案→换图→复核→采纳候选，检查权限、历史和控制台错误。
-- [ ] 可用时真实 OCR 测试；替身流程与 OCR/真实 embedding 质量分别报告。
-- [ ] 分别完成设计符合度与代码质量检查，修复发现的问题；验收报告存 outputs，本地提交，不推送。
+- [x] 全量真实 PG pytest；Ruff、Mypy；全量 pnpm test/typecheck/build/lint。
+- [x] 隔离数据库迁移升级降级升级、备份恢复，禁止操作业务库。
+- [x] 浏览器上传空 OCR 图→补充描述→与代码联合问答→保存答案→换图→复核→采纳候选，检查权限、历史和控制台错误。
+- [x] 可用时真实 OCR 测试；替身流程与 OCR/真实 embedding 质量分别报告。
+- [x] 分别完成设计符合度与代码质量检查，修复发现的问题；验收报告存 outputs，本地提交，不推送。
 
 ## 验证环境
 Python: F:/codex/2026-10-01/wo/work/backend-verification-312/Scripts/python.exe。
 TEST_DATABASE_URL: postgresql+asyncpg://evidence_test:evidence_test_only@127.0.0.1:25432/akb_evidence_test。
 Redis: redis://127.0.0.1:26379/0。每条命令在 packages/backend 执行；不打印 .env 或 Settings。
-
-
