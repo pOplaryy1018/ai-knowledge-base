@@ -10,7 +10,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     op.add_column(
         "source_sync_tasks",
         sa.Column(
@@ -19,7 +19,7 @@ def upgrade():
     )
 
 
-def downgrade():
+def downgrade() -> None:
     op.execute("""DO $$ BEGIN
         IF EXISTS (SELECT 1 FROM source_sync_tasks WHERE payload <> '{}'::jsonb) THEN
             RAISE EXCEPTION 'Image task inputs must be safely cleaned before downgrade';

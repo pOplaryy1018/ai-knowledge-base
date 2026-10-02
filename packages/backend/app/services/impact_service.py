@@ -22,6 +22,10 @@ async def inspect_evidence(session: AsyncSession, evidence: AnswerEvidence, user
         return {**result, "old_text": None, "old_locator": {}, "state": "unavailable", "current_text": None, "locator": None}
     if not evidence.quote or not source.current_revision_id:
         return {**result, "state": "unavailable", "current_text": None, "locator": None}
+    # JSONB may contain legacy non-object values despite the mapped annotation.
+    raw_locator: Any = evidence.locator
+    if source.kind == "image" and not isinstance(raw_locator, dict):
+        return {**result, "old_locator": {}, "state": "unavailable", "reason": "image_untracked", "current_text": None, "locator": None}
     rows = (await session.execute(select(SourceDocument).where(SourceDocument.revision_id == source.current_revision_id))).scalars().all()
     path = evidence.locator.get("logical_path")
     matching = [row for row in rows if row.logical_path == path]
@@ -30,13 +34,14 @@ async def inspect_evidence(session: AsyncSession, evidence: AnswerEvidence, user
         current = await session.get(SourceRevision, source.current_revision_id)
         origin = evidence.locator.get("origin")
         old_hash = evidence.locator.get("image_hash")
-        current_hash = current.manifest.get("image_hash") if current else None
+        current_hash = current.manifest.get("image_hash") if current and isinstance(current.manifest, dict) else None
         channel_paths = {"image_ocr": "ocr_text", "image_ocr_correction": "ocr_correction", "manual_description": "manual_description"}
         result.update(old_revision_id=evidence.revision_id, current_revision_id=source.current_revision_id)
         if (not isinstance(origin, str) or origin not in channel_paths
                 or not isinstance(path, str) or path != channel_paths[origin]
                 or not isinstance(old_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", old_hash)
-                or old is None or old.source_id != source.id or old.manifest.get("image_hash") != old_hash
+                or old is None or old.source_id != source.id or not isinstance(old.manifest, dict)
+                or old.manifest.get("image_hash") != old_hash
                 or current is None or current.source_id != source.id
                 or not isinstance(current_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", current_hash)):
             return {**result, "state": "unavailable", "reason": "image_untracked", "current_text": None, "locator": None}
@@ -51,8 +56,14 @@ async def inspect_evidence(session: AsyncSession, evidence: AnswerEvidence, user
         if matching and current_text is None and match.state != "ambiguous":
             start = evidence.locator.get("char_start", 0)
             offset = start if isinstance(start, int) else 0
-            current_text = matching[0].text[offset:offset + len(evidence.quote)]
-            locator = {**matching[0].locator, "logical_path": matching[0].logical_path}
+            text = matching[0].text
+            offset = min(max(offset, 0), len(text))
+            end = min(offset + len(evidence.quote), len(text))
+            current_text = text[offset:end]
+            locator = {**matching[0].locator, "logical_path": matching[0].logical_path,
+                       "char_start": offset, "char_end": end,
+                       "line_start": text.count("\n", 0, offset) + 1,
+                       "line_end": text.count("\n", 0, end) + 1}
         if old_hash != current_hash:
             return {**result, "state": "changed", "reason": "image_changed", "current_text": current_text, "locator": locator}
         return {**result, "state": match.state, "current_text": current_text, "locator": locator}

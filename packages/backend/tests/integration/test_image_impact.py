@@ -114,6 +114,53 @@ async def test_old_image_channel_must_support_original_quote(
     assert result["reason"] == "image_untracked"
 
 
+@pytest.mark.parametrize("shape", [None, [], "legacy"])
+@pytest.mark.parametrize("target", ["locator", "old_manifest", "current_manifest"])
+async def test_malformed_image_json_is_untracked(
+    lifecycle_client, db_session, monkeypatch, shape, target
+):
+    client, user, kb = lifecycle_client
+    source_id, old, evidence = await image_evidence(client, kb, db_session, monkeypatch)
+    row = evidence["image_ocr"]
+    assert (await run_task(await upload(client, source_id, png("blue"), expected_revision_id=old)))["status"] == "completed"
+    if target == "locator":
+        row.locator = shape
+    else:
+        revision_id = old if target == "old_manifest" else await head(client, source_id)
+        revision = await db_session.get(SourceRevision, revision_id)
+        revision.manifest = shape
+    result = await inspect_evidence(db_session, row, user.id)
+    assert result["state"] == "unavailable" and result["reason"] == "image_untracked"
+    if target == "locator":
+        assert result["old_locator"] == {}
+
+
+@pytest.mark.parametrize("start,current,offset,end,line", [
+    (2, "xxreplacement", 2, 5, 1),
+    (-10, "xxreplacement", 0, 3, 1),
+    (99, "xxreplacement", 13, 13, 1),
+    (3, "xx\nreplacement", 3, 6, 2),
+])
+async def test_image_changed_snippet_locator_matches_actual_slice(
+    lifecycle_client, db_session, monkeypatch, start, current, offset, end, line
+):
+    from app.services.connectors import image
+
+    client, user, kb = lifecycle_client
+    source_id, old, evidence = await image_evidence(client, kb, db_session, monkeypatch)
+    row = evidence["image_ocr"]
+    row.quote = "me "
+    row.locator.update(char_start=start, char_end=start + 3)
+    monkeypatch.setattr(image, "_default_ocr", lambda _: current)
+    response = await client.post(f"/api/sources/{source_id}/image-reextract", json={"expected_revision_id": old})
+    assert (await run_task(response))["status"] == "completed"
+    result = await inspect_evidence(db_session, row, user.id)
+    assert result["state"] == "changed" and result["current_text"] == current[offset:end]
+    assert {key: result["locator"][key] for key in ("char_start", "char_end", "line_start", "line_end")} == {
+        "char_start": offset, "char_end": end, "line_start": line, "line_end": line,
+    }
+
+
 @pytest.mark.parametrize("origin,label", [("image_ocr", "图片OCR"), ("image_ocr_correction", "人工OCR校正"), ("manual_description", "人工描述")])
 def test_image_prompt_labels_origin(origin, label):
     prompt = evidence_prompt([{"index": 1, "knowledge_title": "photo", "content": "text", "locator": {"origin": origin}}])
