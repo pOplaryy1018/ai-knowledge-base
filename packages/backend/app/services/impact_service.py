@@ -1,5 +1,6 @@
 """Direct evidence checks; event retries never decide factual correctness."""
 
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -8,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import async_session
 from app.models.answer import AnswerEvidence, ImpactReview, SavedAnswer
-from app.models.source import Source, SourceChangeEvent, SourceDocument
+from app.models.source import Source, SourceChangeEvent, SourceDocument, SourceRevision
 from app.services.evidence_matching import match_evidence
 from app.services.source_extraction import LocatedText
 
@@ -17,11 +18,41 @@ async def inspect_evidence(session: AsyncSession, evidence: AnswerEvidence, user
     source = await session.get(Source, evidence.source_id)
     result: dict[str, Any] = {"evidence_id": evidence.id, "source_id": evidence.source_id,
                               "old_text": evidence.quote, "old_locator": evidence.locator}
-    if source is None or source.user_id != user_id or source.deleted_at or not evidence.quote or not source.current_revision_id:
+    if source is None or source.user_id != user_id or source.deleted_at:
+        return {**result, "old_text": None, "old_locator": {}, "state": "unavailable", "current_text": None, "locator": None}
+    if not evidence.quote or not source.current_revision_id:
         return {**result, "state": "unavailable", "current_text": None, "locator": None}
     rows = (await session.execute(select(SourceDocument).where(SourceDocument.revision_id == source.current_revision_id))).scalars().all()
     path = evidence.locator.get("logical_path")
     matching = [row for row in rows if row.logical_path == path]
+    if source.kind == "image":
+        old = await session.get(SourceRevision, evidence.revision_id) if evidence.revision_id else None
+        current = await session.get(SourceRevision, source.current_revision_id)
+        origin = evidence.locator.get("origin")
+        old_hash = evidence.locator.get("image_hash")
+        current_hash = current.manifest.get("image_hash") if current else None
+        channel_paths = {"image_ocr": "ocr_text", "image_ocr_correction": "ocr_correction", "manual_description": "manual_description"}
+        result.update(old_revision_id=evidence.revision_id, current_revision_id=source.current_revision_id)
+        if (not isinstance(origin, str) or origin not in channel_paths
+                or not isinstance(path, str) or path != channel_paths[origin]
+                or not isinstance(old_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", old_hash)
+                or old is None or old.source_id != source.id or old.manifest.get("image_hash") != old_hash
+                or current is None or current.source_id != source.id
+                or not isinstance(current_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", current_hash)):
+            return {**result, "state": "unavailable", "reason": "image_untracked", "current_text": None, "locator": None}
+        matching = [row for row in matching if row.locator.get("origin") == origin]
+        documents = [LocatedText(row.logical_path, row.text, row.locator) for row in matching]
+        match = match_evidence(evidence.quote, documents, evidence.locator)
+        current_text = match.current_text
+        locator = match.locator
+        if matching and current_text is None and match.state != "ambiguous":
+            start = evidence.locator.get("char_start", 0)
+            offset = start if isinstance(start, int) else 0
+            current_text = matching[0].text[offset:offset + len(evidence.quote)]
+            locator = {**matching[0].locator, "logical_path": matching[0].logical_path}
+        if old_hash != current_hash:
+            return {**result, "state": "changed", "reason": "image_changed", "current_text": current_text, "locator": locator}
+        return {**result, "state": match.state, "current_text": current_text, "locator": locator}
     # Missing path may be a moved page/paragraph; global exact matching is conservative.
     documents = [LocatedText(row.logical_path, row.text, row.locator) for row in matching or rows]
     match = match_evidence(evidence.quote, documents, evidence.locator)
