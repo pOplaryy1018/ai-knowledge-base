@@ -1,10 +1,9 @@
 """统计路由 ── 概览、趋势、热门知识、标签词云"""
 
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import Result, Select, func, literal_column, select, text, union_all
+from sqlalchemy import String, func, literal_column, select, text, union_all
 
 from app.core.db import async_session
 from app.core.security import get_current_user
@@ -178,10 +177,10 @@ async def get_recent_activities(
 
     async with async_session() as session:
         # 知识库创建
-        kb_stmt: Select[tuple[Any, ...]] = (
+        kb_stmt = (
             select(
                 KnowledgeBase.id.label("id"),
-                literal_column("'kb_created'").label("type"),
+                literal_column("'kb_created'", type_=String()).label("type"),
                 func.concat("创建知识库「", KnowledgeBase.name, "」").label("title"),
                 KnowledgeBase.created_at.label("created_at"),
             )
@@ -191,10 +190,10 @@ async def get_recent_activities(
         kb_stmt = kb_stmt.order_by(KnowledgeBase.created_at.desc()).limit(limit)
 
         # 条目创建
-        item_stmt: Select[tuple[Any, ...]] = (
+        item_stmt = (
             select(
                 KnowledgeItem.id.label("id"),
-                literal_column("'item_created'").label("type"),
+                literal_column("'item_created'", type_=String()).label("type"),
                 func.concat("新增知识条目「", KnowledgeItem.title, "」").label("title"),
                 KnowledgeItem.created_at.label("created_at"),
             )
@@ -204,10 +203,10 @@ async def get_recent_activities(
         item_stmt = item_stmt.order_by(KnowledgeItem.created_at.desc()).limit(limit)
 
         # 条目导入
-        import_stmt: Select[tuple[Any, ...]] = (
+        import_stmt = (
             select(
                 KnowledgeItem.id.label("id"),
-                literal_column("'import_done'").label("type"),
+                literal_column("'import_done'", type_=String()).label("type"),
                 func.concat("导入知识条目「", KnowledgeItem.title, "」").label("title"),
                 KnowledgeItem.created_at.label("created_at"),
             ).where(KnowledgeItem.source == "import")
@@ -217,10 +216,10 @@ async def get_recent_activities(
         import_stmt = import_stmt.order_by(KnowledgeItem.created_at.desc()).limit(limit)
 
         # Agent 创建
-        agent_stmt: Select[tuple[Any, ...]] = (
+        agent_stmt = (
             select(
                 Agent.id.label("id"),
-                literal_column("'agent_created'").label("type"),
+                literal_column("'agent_created'", type_=String()).label("type"),
                 func.concat("创建 Agent「", Agent.name, "」").label("title"),
                 Agent.created_at.label("created_at"),
             ).order_by(Agent.created_at.desc()).limit(limit)
@@ -374,12 +373,11 @@ async def get_top_items(
     kb_ids = await _get_accessible_kb_ids(current_user)
 
     async with async_session() as session:
-        stmt: Select[tuple[Any, ...]]
         # 从 messages.citations JSONB 中统计 knowledge_title 出现频率
         if kb_ids is not None:
             stmt = (
                 select(
-                    literal_column("citation->>'knowledge_title'").label("title"),
+                    literal_column("citation->>'knowledge_title'", type_=String()).label("title"),
                     func.count().label("count"),
                 )
                 .select_from(
@@ -397,7 +395,7 @@ async def get_top_items(
         else:
             stmt = (
                 select(
-                    literal_column("citation->>'knowledge_title'").label("title"),
+                    literal_column("citation->>'knowledge_title'", type_=String()).label("title"),
                     func.count().label("count"),
                 )
                 .select_from(
@@ -409,7 +407,7 @@ async def get_top_items(
                 .limit(limit)
             )
 
-        result: Result[Any] = await session.execute(stmt)
+        result = await session.execute(stmt)
         rows = result.fetchall()
 
         return [
@@ -442,9 +440,9 @@ async def get_tags_wordcloud(
 
         where_clause = " AND ".join(conditions)
 
-        stmt: Select[tuple[Any, ...]] = (
+        stmt = (
             select(
-                literal_column("unnest(tags)").label("tag"),
+                literal_column("unnest(tags)", type_=String()).label("tag"),
                 func.count().label("count"),
             )
             .select_from(text("knowledge_items"))
