@@ -1,4 +1,5 @@
 import subprocess
+import sys
 
 import pytest
 
@@ -73,6 +74,7 @@ def test_filters_are_refused_before_status(tmp_path):
         collect_local(path, allowed_roots=[tmp_path], authorized=True)
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="NTFS junctions are Windows-only")
 def test_git_directory_junction_rejected(tmp_path):
     target = repo(tmp_path / "target")
     holder = tmp_path / "holder"

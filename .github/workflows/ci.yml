@@ -24,12 +24,36 @@ jobs:
 
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: evidence_test
+          POSTGRES_PASSWORD: evidence_test_only
+          POSTGRES_DB: akb_evidence_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U evidence_test -d akb_evidence_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
     defaults:
       run:
         working-directory: packages/backend
     env:
       ENVIRONMENT: test
-      DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/test
+      DATABASE_URL: postgresql+asyncpg://evidence_test:evidence_test_only@127.0.0.1:5432/akb_evidence_test
+      TEST_DATABASE_URL: postgresql+asyncpg://evidence_test:evidence_test_only@127.0.0.1:5432/akb_evidence_test
       REDIS_URL: redis://localhost:6379/0
       JWT_SECRET_KEY: ci-only-key-with-at-least-32-characters
     steps:
@@ -40,6 +64,7 @@ jobs:
           cache: pip
           cache-dependency-path: packages/backend/requirements*.txt
       - run: pip install -r requirements-dev.lock.txt
+      - run: python -m alembic upgrade head
       - run: python -m pytest -q
       - run: python -m ruff check app tests
       - run: python -m mypy app

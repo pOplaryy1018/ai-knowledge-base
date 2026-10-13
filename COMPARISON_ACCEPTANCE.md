@@ -20,7 +20,7 @@ messages与answer_revisions新增可空comparison JSONB，保留兼容正文；�
 - 前端：40 tests passed；双端vue-tsc通过。
 - 无头Chrome：11类验证，覆盖来源数量、SSE、维度筛选、原文/版本/定位、原件下载、保存、读回、候选采纳、历史引用、HTML转义、手机内容宽度。HTTP使用确定性替身。
 - 真实模型：独立PG中的两份合成资料生成两个维度、两个有效引用。检索向量使用确定性替身；不是全量检索质量验收。
-- Ruff app/tests通过；修改范围Mypy（排除既有statistics.py）检查77个文件通过。完整Mypy仍有statistics.py的12个既有Select类型错误，该文件未修改。
+- Ruff app/tests通过；2026-10-13 CI修复已纠正statistics.py的SQLAlchemy Select类型注解，完整Mypy检查79个文件通过。
 - 双端生产构建通过；全项目ESLint无error、27个既有warning；本次四个Vue文件无warning。构建保留既有大chunk提示、jieba弃用warning。
 ## 重跑
 在仓库根目录运行：
@@ -45,8 +45,13 @@ $env:REDIS_URL='redis://127.0.0.1:26379/0'
 真实模型小样例需已有模型配置，显式运行 `.venv/Scripts/python.exe -m pytest tests/manual/live_comparison_smoke.py -q -s`，会产生少量模型调用费用。默认全套测试不会调用它。
 浏览器：先启动 `pnpm --filter @akb/consumer dev --host 127.0.0.1 --port 54184`，配置PLAYWRIGHT_MODULE为安装的playwright模块路径；执行 `node tests/e2e/comparison-browser.cjs`。COMPARISON_OUTPUT可指定截图输出目录。
 ## 部署
-本次未修改业务数据库或部署；代码按用户要求提交并推送GitHub开发分支。正式库使用新代码前需备份并在副本确认迁移，再执行alembic upgrade head并重启后端。
+本次未修改业务数据库或部署；代码按用户要求提交并推送GitHub主分支master。正式库使用新代码前需备份并在副本确认迁移，再执行alembic upgrade head并重启后端。
 降级保护会拒绝直接删除已有卡片字段；不要通过清空卡片绕过保护，应保留/导出历史并制定恢复方案。
 测试环境已补装锁文件中既有的pytesseract==0.3.13；没有安装Tesseract或更改OCR业务配置。
 
 独立只读代码审查未发现可确认的重要阻塞问题；审查没有代替测试执行。
+
+## CI平台与数据库回归修复
+Linux runner仅跳过NTFS junction专属测试，保留POSIX符号链接测试；Windows仍运行junction测试。
+CI配置独立PostgreSQL+pgvector和Redis服务，先执行迁移，再设置TEST_DATABASE_URL运行真实数据库集成测试。
+本轮本地Docker启动故障，相关单元测试19通过1权限跳过；数据库回归由GitHub runner的独立服务执行。

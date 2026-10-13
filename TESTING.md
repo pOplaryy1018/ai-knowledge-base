@@ -73,3 +73,7 @@ API：`POST /api/sources`的kind为image；`POST /api/sources/{id}/image-revisio
 ## 带原文引用的资料对比
 
 个人资料问答选择2至4份已发布资料，切换资料对比并输入比较问题。支持维度筛选、引用原文/版本查看、保存与历史候选。使用说明、迁移步骤和2026-10-13实际验收结果见 [COMPARISON_ACCEPTANCE.md](COMPARISON_ACCEPTANCE.md)。
+
+## GitHub Actions隔离回归
+
+Quality gates的backend job在Ubuntu/Python 3.12运行。工作流提供独立PostgreSQL+pgvector和Redis服务，迁移成功后运行完整pytest（含TEST_DATABASE_URL集成测试）、Ruff、完整Mypy及离线迁移/Compose配置检查。NTFS junction测试仅在Windows运行；Linux保留POSIX符号链接测试。数据库名固定为akb_evidence_test，不能替换为业务库。

@@ -178,7 +178,7 @@ async def get_recent_activities(
 
     async with async_session() as session:
         # 知识库创建
-        kb_stmt: Select[*tuple[Any, ...]] = (
+        kb_stmt: Select[tuple[Any, ...]] = (
             select(
                 KnowledgeBase.id.label("id"),
                 literal_column("'kb_created'").label("type"),
@@ -191,7 +191,7 @@ async def get_recent_activities(
         kb_stmt = kb_stmt.order_by(KnowledgeBase.created_at.desc()).limit(limit)
 
         # 条目创建
-        item_stmt: Select[*tuple[Any, ...]] = (
+        item_stmt: Select[tuple[Any, ...]] = (
             select(
                 KnowledgeItem.id.label("id"),
                 literal_column("'item_created'").label("type"),
@@ -204,7 +204,7 @@ async def get_recent_activities(
         item_stmt = item_stmt.order_by(KnowledgeItem.created_at.desc()).limit(limit)
 
         # 条目导入
-        import_stmt: Select[*tuple[Any, ...]] = (
+        import_stmt: Select[tuple[Any, ...]] = (
             select(
                 KnowledgeItem.id.label("id"),
                 literal_column("'import_done'").label("type"),
@@ -217,7 +217,7 @@ async def get_recent_activities(
         import_stmt = import_stmt.order_by(KnowledgeItem.created_at.desc()).limit(limit)
 
         # Agent 创建
-        agent_stmt: Select[*tuple[Any, ...]] = (
+        agent_stmt: Select[tuple[Any, ...]] = (
             select(
                 Agent.id.label("id"),
                 literal_column("'agent_created'").label("type"),
@@ -374,7 +374,7 @@ async def get_top_items(
     kb_ids = await _get_accessible_kb_ids(current_user)
 
     async with async_session() as session:
-        stmt: Select[*tuple[Any, ...]]
+        stmt: Select[tuple[Any, ...]]
         # 从 messages.citations JSONB 中统计 knowledge_title 出现频率
         if kb_ids is not None:
             stmt = (
@@ -442,7 +442,7 @@ async def get_tags_wordcloud(
 
         where_clause = " AND ".join(conditions)
 
-        stmt: Select[*tuple[Any, ...]] = (
+        stmt: Select[tuple[Any, ...]] = (
             select(
                 literal_column("unnest(tags)").label("tag"),
                 func.count().label("count"),
