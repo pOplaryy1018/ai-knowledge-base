@@ -110,7 +110,7 @@ async def prepare_conversation(question: str, source_ids: list[str], user_id: st
         return conversation.id, versions, history + [{"role": "user", "content": question}]
 
 
-async def persist_answer(conversation_id: str, question: str, versions: dict[str, str], answer: str, citations: list[dict[str, Any]], complete: bool) -> str:
+async def persist_answer(conversation_id: str, question: str, versions: dict[str, str], answer: str, citations: list[dict[str, Any]], complete: bool, comparison: dict[str, Any] | None = None) -> str:
     async with async_session() as session:
         available: set[str] = set()
         for source_id in sorted(versions):
@@ -121,7 +121,7 @@ async def persist_answer(conversation_id: str, question: str, versions: dict[str
             if citation.get("source_id") not in available:
                 citation.update(content=None, quote=None, locator={}, unavailable=True)
         message = Message(conversation_id=conversation_id, role="assistant", content=answer, citations=citations,
-                          question=question, source_versions=versions, generation_complete=complete)
+                          question=question, source_versions=versions, generation_complete=complete, comparison=comparison)
         session.add(message)
         conversation = await session.get(Conversation, conversation_id)
         if conversation is not None:
@@ -168,4 +168,29 @@ async def run_scoped_stream(conversation_id: str, question: str, versions: dict[
         yield event("error", {"message": "回答生成中断，请重试。"})
         return
     yield event("citations", final_citations)
+    yield event("done", {"conversation_id": conversation_id, "message_id": message_id})
+
+
+async def run_comparison_stream(conversation_id: str, question: str, versions: dict[str, str],
+                                user_id: str) -> AsyncGenerator[bytes, None]:
+    from app.services.comparison_service import generate_comparison
+
+    yield event("meta", {"conversation_id": conversation_id})
+    yield event("progress", {"message": "正在逐份检索资料并生成带引用的对比…"})
+    try:
+        content, citations, comparison, warning = await generate_comparison(question, versions, user_id)
+        if not content.strip():
+            raise ValueError("模型返回空答案")
+        message_id = await asyncio.shield(persist_answer(
+            conversation_id, question, versions, content, citations, True, comparison=comparison,
+        ))
+    except Exception:
+        yield event("error", {"message": "对比生成中断，请重试。"})
+        return
+    yield event("token", {"content": content})
+    yield event("citations", citations)
+    if warning:
+        yield event("warning", {"message": warning})
+    if comparison:
+        yield event("comparison", comparison)
     yield event("done", {"conversation_id": conversation_id, "message_id": message_id})

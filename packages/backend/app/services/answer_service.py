@@ -82,7 +82,7 @@ async def save_answer(session: AsyncSession, user_id: str, message_id: str) -> S
     saved = SavedAnswer(user_id=user_id, question=question, source_ids=ids, origin_message_id=message_id)
     session.add(saved)
     await session.flush()
-    revision = AnswerRevision(saved_answer_id=saved.id, content=message.content, source_versions=message.source_versions or {}, origin_message_id=message.id)
+    revision = AnswerRevision(saved_answer_id=saved.id, content=message.content, source_versions=message.source_versions or {}, origin_message_id=message.id, comparison=message.comparison)
     session.add(revision)
     await session.flush()
     saved.accepted_revision_id = revision.id
@@ -101,17 +101,34 @@ async def save_answer(session: AsyncSession, user_id: str, message_id: str) -> S
 async def answer_payload(session: AsyncSession, saved: SavedAnswer) -> dict[str, Any]:
     revision = await session.get(AnswerRevision, saved.accepted_revision_id) if saved.accepted_revision_id else None
     evidence = (await session.execute(select(AnswerEvidence).where(AnswerEvidence.answer_revision_id == saved.accepted_revision_id))).scalars().all()
-    results = [await inspect_evidence(session, row, saved.user_id) for row in evidence]
+    results = [{**(await inspect_evidence(session, row, saved.user_id)), "citation_index": row.citation_index,
+                "old_revision_id": row.revision_id, "document_id": row.document_id} for row in evidence]
     states = {result["state"] for result in results}
     status = "untracked" if not evidence else ("unavailable" if "unavailable" in states else
              "needs_review" if states & {"changed", "missing", "ambiguous"} else "unchanged")
     history = (await session.execute(select(AnswerRevision).where(AnswerRevision.saved_answer_id == saved.id).order_by(AnswerRevision.created_at))).scalars().all()
+    history_payload = []
+    for row in history:
+        citations = []
+        if row.comparison:
+            entries = (await session.execute(select(AnswerEvidence).where(
+                AnswerEvidence.answer_revision_id == row.id,
+            ))).scalars().all()
+            for entry in entries:
+                checked = await inspect_evidence(session, entry, saved.user_id)
+                if checked["old_text"] and entry.revision_id and entry.document_id:
+                    citations.append({"index": entry.citation_index, "source_id": entry.source_id,
+                                      "revision_id": entry.revision_id, "document_id": entry.document_id,
+                                      "content": checked["old_text"], "locator": checked["old_locator"]})
+        history_payload.append({"id": row.id, "content": row.content, "kind": row.kind,
+                                "source_versions": row.source_versions, "created_at": row.created_at,
+                                "comparison": row.comparison, "citations": citations})
     return {"id": saved.id, "question": saved.question, "source_ids": saved.source_ids,
             "accepted_revision_id": saved.accepted_revision_id, "content": revision.content if revision else "",
             "source_versions": revision.source_versions if revision else {}, "status": status,
+            "comparison": revision.comparison if revision else None,
             "evidence": results, "created_at": saved.created_at,
-            "versions": [{"id": row.id, "content": row.content, "kind": row.kind, "source_versions": row.source_versions,
-                          "created_at": row.created_at} for row in history]}
+            "versions": history_payload}
 
 
 async def accept_candidate(session: AsyncSession, user_id: str, answer_id: str, candidate_id: str,

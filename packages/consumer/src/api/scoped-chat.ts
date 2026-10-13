@@ -1,7 +1,9 @@
 import { readSSE } from '@akb/shared'
-import type { SourceCitation } from '@akb/shared'
+import type { SourceCitation, SourceComparison, ScopedResponseMode } from '@akb/shared'
 import { getAccessToken, getAuthGeneration, refreshAccessToken, handleUnauthorized } from './client'
 export type ScopedEvent =
+  | { type: 'comparison'; data: SourceComparison }
+  | { type: 'warning' | 'progress'; data: { message: string } }
   | { type: 'meta'; data: { conversation_id: string } }
   | { type: 'token'; data: { content: string } }
   | { type: 'citations'; data: SourceCitation[] }
@@ -12,6 +14,7 @@ export async function* scopedChatSSE(
   sourceIds: string[],
   conversationId?: string,
   signal?: AbortSignal,
+  responseMode: ScopedResponseMode = 'text',
 ): AsyncGenerator<ScopedEvent> {
   const generation = getAuthGeneration()
   const assertActive = () => {
@@ -25,7 +28,12 @@ export async function* scopedChatSSE(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${getAccessToken() || ''}`,
       },
-      body: JSON.stringify({ question, source_ids: sourceIds, conversation_id: conversationId }),
+      body: JSON.stringify({
+        question,
+        source_ids: sourceIds,
+        conversation_id: conversationId,
+        response_mode: responseMode,
+      }),
       signal,
     })
   assertActive()
@@ -45,7 +53,11 @@ export async function* scopedChatSSE(
   if (!response.body) throw new Error('浏览器不支持流式读取')
   for await (const event of readSSE(response.body)) {
     assertActive()
-    if (['meta', 'token', 'citations', 'done', 'error'].includes(event.type))
+    if (
+      ['meta', 'token', 'citations', 'done', 'error', 'comparison', 'warning', 'progress'].includes(
+        event.type,
+      )
+    )
       yield { type: event.type, data: JSON.parse(event.data) } as ScopedEvent
   }
 }

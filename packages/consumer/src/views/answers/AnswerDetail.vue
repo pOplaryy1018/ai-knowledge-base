@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
+import ComparisonCard from '@/components/ComparisonCard.vue'
 import ImageEvidenceComparison from '@/components/ImageEvidenceComparison.vue'
 import { useRoute } from 'vue-router'
-import type { SavedAnswer, AnswerCandidate, EvidenceResult } from '@akb/shared'
+import type { SavedAnswer, AnswerCandidate, EvidenceResult, SourceCitation } from '@akb/shared'
 import { getAnswer, generateCandidate, acceptCandidate, getEvidence } from '@/api/answers'
 import { downloadOriginal } from '@/api/sources'
 import {
@@ -21,6 +22,27 @@ const route = useRoute(),
   error = ref(''),
   busy = ref(false)
 const note = ref('')
+const currentCitations = computed<SourceCitation[]>(() =>
+  (answer.value?.evidence || [])
+    .filter(
+      (item) =>
+        item.citation_index !== undefined &&
+        !!item.old_text &&
+        !!item.old_revision_id &&
+        !!item.document_id,
+    )
+    .map((item) => ({
+      index: item.citation_index!,
+      source_id: item.source_id,
+      revision_id: item.old_revision_id!,
+      document_id: item.document_id!,
+      content: item.old_text!,
+      locator: item.old_locator,
+    })),
+)
+async function cardOriginal(citation: SourceCitation, request: RequestTicket) {
+  await downloadOriginal(citation.source_id, citation.revision_id, '引用原件', request.signal)
+}
 let ticket: RequestTicket
 async function act(action: (request: RequestTicket) => Promise<void>) {
   const request = ticket
@@ -97,7 +119,16 @@ onUnmounted(() => scope.dispose())
       {{ error }}
     </a-alert><template v-if="answer">
       <a-tag>{{ answerStatusLabel(answer.status) }}</a-tag><a-card title="当前采纳答案">
-        <p style="white-space: pre-wrap">
+        <ComparisonCard
+          v-if="answer.comparison"
+          :comparison="answer.comparison"
+          :citations="currentCitations"
+          @original="(citation) => act((request) => cardOriginal(citation, request))"
+        />
+        <p
+          v-else
+          style="white-space: pre-wrap"
+        >
           {{ answer.content }}
         </p>
         <p>本答案依据 {{ Object.keys(answer.source_versions).length }} 个资料版本。</p>
@@ -156,7 +187,22 @@ onUnmounted(() => scope.dispose())
         v-if="candidate"
         title="候选答案（尚未采纳）"
       >
-        <p style="white-space: pre-wrap">
+        <a-alert
+          v-if="candidate.warning"
+          type="warning"
+        >
+          {{ candidate.warning }}
+        </a-alert>
+        <ComparisonCard
+          v-if="candidate.comparison"
+          :comparison="candidate.comparison"
+          :citations="candidate.citations"
+          @original="(citation) => act((request) => cardOriginal(citation, request))"
+        />
+        <p
+          v-else
+          style="white-space: pre-wrap"
+        >
           {{ candidate.content }}
         </p>
         <a-collapse>
@@ -180,7 +226,16 @@ onUnmounted(() => scope.dispose())
           :key="version.id"
           :header="`第 ${versionIndex + 1} 版 · ${version.kind === 'candidate' ? '候选' : '保存'} · ${new Date(version.created_at).toLocaleString()}`"
         >
-          <p style="white-space: pre-wrap">
+          <ComparisonCard
+            v-if="version.comparison"
+            :comparison="version.comparison"
+            :citations="version.citations"
+            @original="(citation) => act((request) => cardOriginal(citation, request))"
+          />
+          <p
+            v-else
+            style="white-space: pre-wrap"
+          >
             {{ version.content }}
           </p>
           <p>依据 {{ Object.keys(version.source_versions).length }} 个资料版本。</p>

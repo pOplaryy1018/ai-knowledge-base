@@ -57,8 +57,16 @@ async def candidate(answer_id: UUID, user: User = Depends(get_current_user)) -> 
         versions = await resolve_scope(session, user.id, list(saved.source_ids))
         question = saved.question
         baseline = saved.accepted_revision_id
+        accepted = await session.get(AnswerRevision, baseline) if baseline else None
+        comparison_mode = bool(accepted and accepted.comparison)
     try:
-        content, citations = await generate_scoped_answer(question, versions, user.id)
+        comparison = None
+        warning = None
+        if comparison_mode:
+            from app.services.comparison_service import generate_comparison
+            content, citations, comparison, warning = await generate_comparison(question, versions, user.id)
+        else:
+            content, citations = await generate_scoped_answer(question, versions, user.id)
         if not content.strip():
             raise ValueError("模型返回空答案")
     except Exception as error:
@@ -71,13 +79,13 @@ async def candidate(answer_id: UUID, user: User = Depends(get_current_user)) -> 
         # Recheck permission after the external generation call.
         await lock_sources(session, user.id, list(saved.source_ids), require_active=True)
         saved = await owned_answer(session, user.id, str(answer_id), lock=True)
-        revision = AnswerRevision(saved_answer_id=saved.id, content=content, kind="candidate", source_versions=versions)
+        revision = AnswerRevision(saved_answer_id=saved.id, content=content, kind="candidate", source_versions=versions, comparison=comparison)
         session.add(revision)
         await session.flush()
         await append_evidence(session, revision, citations)
         await session.commit()
         return {"id": revision.id, "content": content, "source_versions": versions, "expected_answer_revision_id": baseline,
-                "citations": citations, "kind": "candidate"}
+                "citations": citations, "kind": "candidate", "comparison": comparison, "warning": warning}
 
 
 @router.post("/answers/{answer_id}/accept")

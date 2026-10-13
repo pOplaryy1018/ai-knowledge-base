@@ -199,3 +199,7 @@ graph LR
 - 本项目依赖第三方 LLM 服务（如 DeepSeek、OpenAI），用户需自行申请 API Key
 - 生产环境部署时请务必更换所有默认密码和密钥
 - OCR 功能需要安装 Tesseract 及对应语言包
+
+## 带原文引用的资料对比
+
+个人资料问答选择2至4份已发布资料，切换资料对比并输入比较问题。支持维度筛选、引用原文/版本查看、保存与历史候选。使用说明、迁移步骤和2026-10-13实际验收结果见 [COMPARISON_ACCEPTANCE.md](COMPARISON_ACCEPTANCE.md)。

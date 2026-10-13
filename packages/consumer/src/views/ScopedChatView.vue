@@ -1,11 +1,27 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
-import type { Source, SourceCitation } from '@akb/shared'
+import type { Source, SourceCitation, SourceComparison, ScopedResponseMode } from '@akb/shared'
 import { listSources, downloadOriginal } from '@/api/sources'
 import { scopedChatSSE } from '@/api/scoped-chat'
 import { saveAnswer } from '@/api/answers'
-import { sourceSelectable, canSaveAnswer, errorMessage, formatLocator, versionLabel } from '@/utils/review-state'
+import {
+  sourceSelectable,
+  canSaveAnswer,
+  errorMessage,
+  formatLocator,
+  versionLabel,
+} from '@/utils/review-state'
+import ComparisonCard from '@/components/ComparisonCard.vue'
+import { canCompare } from '@/utils/comparison'
+const mode = ref<ScopedResponseMode>('text')
+const progress = ref('')
+const canSend = computed(
+  () =>
+    !!question.value.trim() &&
+    !streaming.value &&
+    (mode.value === 'comparison' ? canCompare(scope.value) : !!scope.value.length),
+)
 const store = useUserStore()
 const controller = new AbortController()
 let streamController: AbortController | undefined
@@ -22,6 +38,8 @@ const messages = ref<
     citations: SourceCitation[]
     messageId?: string
     saved?: boolean
+    comparison?: SourceComparison
+    warning?: string
   }[]
 >([])
 watch(scope, () => {
@@ -42,10 +60,10 @@ watch(
   },
 )
 async function send() {
-  if (!question.value.trim() || !scope.value.length || streaming.value) return
+  if (!canSend.value) return
   streamController = new AbortController()
   const signal = streamController.signal
-  const item = {
+  const item: (typeof messages.value)[number] = {
     question: question.value.trim(),
     content: '',
     citations: [] as SourceCitation[],
@@ -56,13 +74,19 @@ async function send() {
   question.value = ''
   streaming.value = true
   error.value = ''
+  progress.value = mode.value === 'comparison' ? '正在生成资料对比…' : ''
   try {
     for await (const event of scopedChatSSE(
       current.question,
       [...scope.value],
       conversation.value,
       signal,
+      mode.value,
     )) {
+      if (signal.aborted || streamController?.signal !== signal) break
+      if (event.type === 'comparison') current.comparison = event.data
+      if (event.type === 'warning') current.warning = event.data.message
+      if (event.type === 'progress') progress.value = event.data.message
       if (event.type === 'meta') conversation.value = event.data.conversation_id
       if (event.type === 'token') current.content += event.data.content
       if (event.type === 'citations') current.citations = event.data
@@ -73,7 +97,10 @@ async function send() {
   } catch (e) {
     if (!signal.aborted) error.value = errorMessage(e)
   } finally {
-    if (streamController?.signal === signal) streaming.value = false
+    if (streamController?.signal === signal) {
+      streaming.value = false
+      progress.value = ''
+    }
   }
 }
 async function save(item: (typeof messages.value)[number]) {
@@ -119,22 +146,52 @@ onUnmounted(() => {
       v-model="scope"
       multiple
       placeholder="选择问题来源"
+      :disabled="streaming"
     >
       <a-option
         v-for="source in sources"
         :key="source.id"
         :value="source.id"
       >
-        {{
-          source.name
-        }}
+        {{ source.name }}
       </a-option>
-    </a-select><a-card
+    </a-select>
+    <a-radio-group
+      v-model="mode"
+      type="button"
+      :disabled="streaming"
+    >
+      <a-radio value="text">
+        普通问答
+      </a-radio>
+      <a-radio value="comparison">
+        资料对比
+      </a-radio>
+    </a-radio-group>
+    <a-alert v-if="mode === 'comparison'">
+      选择2至4份不同资料，输入要比较的问题或维度。没有证据的单元格会明确标注。
+    </a-alert>
+    <a-card
       v-for="(item, index) in messages"
       :key="index"
       :title="item.question"
     >
-      <p style="white-space: pre-wrap">
+      <a-alert
+        v-if="item.warning"
+        type="warning"
+      >
+        {{ item.warning }}
+      </a-alert>
+      <ComparisonCard
+        v-if="item.comparison"
+        :comparison="item.comparison"
+        :citations="item.citations"
+        @original="original"
+      />
+      <p
+        v-else
+        style="white-space: pre-wrap"
+      >
         {{ item.content }}
       </p>
       <a-collapse>
@@ -153,20 +210,30 @@ onUnmounted(() => {
         :disabled="!canSaveAnswer(item) || item.saved"
         @click="save(item)"
       >
-        {{
-          item.saved ? '已保存' : '保存答案'
-        }}
+        {{ item.saved ? '已保存' : '保存答案' }}
       </a-button>
     </a-card><a-textarea
       v-model="question"
-      placeholder="针对所选资料提问"
-    /><a-space>
+      :disabled="streaming"
+      :placeholder="
+        mode === 'comparison'
+          ? '例如：比较这些资料中的事务支持、索引结构和适用场景'
+          : '针对所选资料提问'
+      "
+    />
+    <p
+      v-if="streaming && progress"
+      role="status"
+    >
+      {{ progress }}
+    </p>
+    <a-space>
       <a-button
         type="primary"
-        :disabled="!scope.length || !question.trim() || streaming"
+        :disabled="!canSend"
         @click="send"
       >
-        提问
+        {{ mode === 'comparison' ? '生成对比' : '提问' }}
       </a-button><a-button
         v-if="streaming"
         @click="streamController?.abort()"

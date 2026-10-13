@@ -28,6 +28,7 @@ class AnswerRevision(Base):
     content: Mapped[str] = mapped_column(Text)
     source_versions: Mapped[dict[str, str]] = mapped_column(JSONB, default=dict)
     kind: Mapped[str] = mapped_column(String(20), default="original")
+    comparison: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
     origin_message_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), ForeignKey("messages.id", ondelete="SET NULL"))
 
 

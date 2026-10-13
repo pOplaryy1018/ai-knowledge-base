@@ -129,8 +129,19 @@ function handleLogout() {
 }
 
 .workspace-main {
+  min-width: 0;
   flex: 1;
   overflow-y: auto;
   padding: 20px;
+}
+
+@media (max-width: 640px) {
+  .workspace-layout { flex-direction: column; }
+  .workspace-sidebar { width: 100%; min-width: 0; flex-shrink: 0; }
+  .sidebar-brand { padding: 10px 16px; }
+  .sidebar-nav { display: flex; overflow-x: auto; flex: none; gap: 4px; padding: 4px 8px; }
+  .nav-item { flex-shrink: 0; white-space: nowrap; margin: 0; padding: 8px; }
+  .sidebar-footer { padding: 2px 8px; }
+  .workspace-main { padding: 12px; }
 }
 </style>

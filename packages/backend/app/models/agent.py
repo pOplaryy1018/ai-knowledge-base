@@ -127,6 +127,7 @@ class Message(Base):
     source_versions: Mapped[dict[str, str] | None] = mapped_column(JSONB, nullable=True)
     question: Mapped[str | None] = mapped_column(Text, nullable=True)
     generation_complete: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    comparison: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
 
     conversation: Mapped["Conversation"] = relationship(
         "Conversation",

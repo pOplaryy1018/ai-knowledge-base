@@ -1,7 +1,10 @@
 import type { SourceCitation } from './source'
+import type { SourceComparison } from './comparison'
 export type AnswerStatus = 'untracked' | 'unchanged' | 'needs_review' | 'unavailable'
 export interface EvidenceResult {
   evidence_id: string
+  citation_index?: number
+  document_id?: string
   source_id: string
   state: string
   old_text: string | null
@@ -13,6 +16,8 @@ export interface EvidenceResult {
   current_revision_id?: string
 }
 export interface AnswerVersion {
+  citations?: SourceCitation[]
+  comparison?: SourceComparison | null
   id: string
   content: string
   kind: string
@@ -20,6 +25,7 @@ export interface AnswerVersion {
   created_at: string
 }
 export interface SavedAnswer {
+  comparison?: SourceComparison | null
   id: string
   question: string
   source_ids: string[]
@@ -32,6 +38,8 @@ export interface SavedAnswer {
   created_at: string
 }
 export interface AnswerCandidate {
+  comparison?: SourceComparison | null
+  warning?: string | null
   id: string
   content: string
   source_versions: Record<string, string>

@@ -69,3 +69,7 @@ API：`POST /api/sources`的kind为image；`POST /api/sources/{id}/image-revisio
 ## 已知非阻塞项
 
 前端 lint 有既有 28 个 warning，构建仍有大 chunk 提示；后端 jieba 有 pkg_resources 弃用 warning。来源任务失败提示目前为通用提示，原已发布版本保留。Docker 镜像下载经过本地代理可能间歇 EOF/reset。
+
+## 带原文引用的资料对比
+
+个人资料问答选择2至4份已发布资料，切换资料对比并输入比较问题。支持维度筛选、引用原文/版本查看、保存与历史候选。使用说明、迁移步骤和2026-10-13实际验收结果见 [COMPARISON_ACCEPTANCE.md](COMPARISON_ACCEPTANCE.md)。
