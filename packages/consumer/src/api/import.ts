@@ -23,15 +23,20 @@ export function createProgressEventSource(taskId: string) {
 
 import type { KnowledgeFile, KnowledgeFilePreview, FileRetryResponse } from '@akb/shared'
 
-export async function previewFile(kbId: string, fileId: string): Promise<KnowledgeFilePreview> {
+export async function previewFile(kbId: string, fileId: string, signal?: AbortSignal): Promise<KnowledgeFilePreview> {
   const { data } = await getApiClient().get<KnowledgeFilePreview>(
     `/knowledge-bases/${kbId}/files/${fileId}/preview`,
+    { signal },
   )
   return data
 }
 
-export function getRawFileUrl(kbId: string, fileId: string, token: string): string {
-  return `/api/knowledge-bases/${kbId}/files/${fileId}/raw?token=${encodeURIComponent(token)}`
+export async function getRawFile(kbId: string, fileId: string, signal?: AbortSignal): Promise<Blob> {
+  const { data } = await getApiClient().get<Blob>(
+    `/knowledge-bases/${kbId}/files/${fileId}/raw`,
+    { responseType: 'blob', signal },
+  )
+  return data
 }
 
 export async function listFiles(kbId: string, params: Record<string, any> = {}) {

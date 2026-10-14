@@ -24,6 +24,7 @@ export const useChatStore = defineStore('chat', () => {
 
   /** SSE 流控制器，用于手动停止生成 */
   let controller: AbortController | null = null
+  let agentController: AbortController | null = null
   let requestId = 0
 
   // ── 计算属性 ──
@@ -33,31 +34,39 @@ export const useChatStore = defineStore('chat', () => {
 
   function resetChatState() {
     stopStreaming()
+    agentController?.abort()
+    agentController = null
     agent.value = null
     currentConversationId.value = null
     messages.value = []
     streamingContent.value = ''
     streamingCitations.value = null
     isStreaming.value = false
+    isLoading.value = false
   }
 
   // ── Actions ──
 
-  /** 获取第一个（唯一）Agent 并自动进入问答 */
-  async function fetchDefaultAgent() {
+  /** 分享链接选择指定 Agent；未指定时保留默认助手入口。 */
+  async function fetchDefaultAgent(agentId?: string) {
+    resetChatState()
     const id = requestId
+    const ownController = new AbortController()
+    agentController = ownController
     isLoading.value = true
     try {
-      const { data } = await getApiClient().get<{ items: Agent[] }>('/agents', {
-        params: { page: 1, size: 1 }})
+      const selected = agentId
+        ? (await getApiClient().get<Agent>(`/agents/${encodeURIComponent(agentId)}`, { signal: ownController.signal })).data
+        : (await getApiClient().get<{ items: Agent[] }>('/agents', {
+          params: { page: 1, size: 1 }, signal: ownController.signal })).data.items?.[0]
       if (id !== requestId) return null
-      if (data.items && data.items.length > 0) {
-        agent.value = data.items[0]
-        return data.items[0]
-      }
-      return null
+      agent.value = selected || null
+      return agent.value
+    } catch (error) {
+      if (id !== requestId) return null
+      throw error
     } finally {
-      if (id === requestId) isLoading.value = false
+      if (id === requestId) { isLoading.value = false; agentController = null }
     }
   }
 

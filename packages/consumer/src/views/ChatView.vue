@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
  * AI 问答界面 ── 全屏简洁版
- * 自动获取唯一 Agent，支持 SSE 流式输出、Markdown 渲染、引用标注
+ * 获取默认或分享链接指定的 Agent，支持 SSE 流式输出、Markdown 渲染、引用标注
  */
 
-import { ref, watch, nextTick, onMounted, onUnmounted, computed } from 'vue'
+import { ref, watch, nextTick, onUnmounted, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import { useChatStore } from '@/stores/chat'
 import MarkdownIt from 'markdown-it'
@@ -13,6 +14,7 @@ import 'highlight.js/styles/github.css'
 import type { ChatMessage } from '@akb/shared'
 
 const store = useChatStore()
+const route = useRoute()
 
 // ── Markdown 渲染器 ──
 const md = new MarkdownIt({
@@ -141,20 +143,24 @@ function formatTime(dateStr: string): string {
     day: 'numeric'})
 }
 
-onUnmounted(() => store.stopStreaming())
+onUnmounted(() => store.resetChatState())
 
 // ── 生命周期 ──
-onMounted(async () => {
-  store.resetChatState()
+watch(() => route.query.agent_id, async (value, _previous, onCleanup) => {
+  let current = true
+  onCleanup(() => { current = false })
+  inputText.value = ''
+  expandedCitations.value = new Set()
+  const agentId = typeof value === 'string' && value.trim() ? value : undefined
   try {
-    const agent = await store.fetchDefaultAgent()
-    if (!agent) {
+    const agent = await store.fetchDefaultAgent(agentId)
+    if (current && !agent) {
       Message.warning('暂无可用的 AI 助手，请联系管理员配置')
     }
   } catch {
-    Message.error('加载 AI 助手失败')
+    if (current) Message.error('加载 AI 助手失败')
   }
-})
+}, { immediate: true })
 </script>
 
 <template>

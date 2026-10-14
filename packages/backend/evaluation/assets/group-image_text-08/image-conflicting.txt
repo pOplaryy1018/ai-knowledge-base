@@ -1,0 +1,2 @@
+Synthetic fixture group-image_text-08 conflicting
+Retention days: 85.

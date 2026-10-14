@@ -8,6 +8,7 @@
 - 🖼️ **图片 OCR**：自动识别图片中的中文/英文文字内容
 - 🔍 **向量化检索**：基于 sentence-transformers 的文本向量化 + pgvector 向量存储
 - 🤖 **AI 智能对话**：结合知识库上下文的 RAG 问答，支持流式 SSE 推送
+- 📝 **LLM Wiki**：从已发布资料编译主题草稿，人工编辑发布、双向链接、原文版本引用、来源变化提示、修订历史及 Markdown 导出
 - 📊 **统计面板**：知识条目趋势、对话趋势、热门知识排行等数据可视化
 - 👥 **用户管理**：JWT 认证、角色权限控制（超级管理员 / 普通用户）
 - 🏗️ **Monorepo 架构**：pnpm workspace 管理前后端多个子包
@@ -23,7 +24,7 @@
 | 数据请求 | @tanstack/vue-query | 服务端状态缓存 |
 | 图表 | ECharts + vue-echarts | 统计面板可视化 |
 | 后端框架 | FastAPI (Python 3.12) | 异步 Web 框架 |
-| ORM | SQLAlchemy 2.0 (async) | 异步数据库操作 |
+| ORM | SQLAlchemy 2.1 (async) | 依赖版本以锁文件为准 |
 | 数据校验 | Pydantic V2 | 类型安全配置与校验 |
 | 数据库 | PostgreSQL 16 + pgvector | 向量存储 |
 | 缓存 / 队列 | Redis 7 + arq | 异步任务队列 |
@@ -203,3 +204,13 @@ graph LR
 ## 带原文引用的资料对比
 
 个人资料问答选择2至4份已发布资料，切换资料对比并输入比较问题。支持维度筛选、引用原文/版本查看、保存与历史候选。使用说明、迁移步骤和2026-10-13实际验收结果见 [COMPARISON_ACCEPTANCE.md](COMPARISON_ACCEPTANCE.md)。
+
+## LLM Wiki
+
+进入用户端 `/workspace/wiki`，选择已发布资料并输入主题，即可生成带引用的Wiki草稿。人工编辑、查看原文与资料版本后发布；使用 `[[slug]]` 关联自己的其他页面。重编译产生新草稿，旧发布与历史保留；导出只包含已发布内容。
+
+新增迁移 `20261014_wiki`，已有数据先备份并在副本验证，再按上文升级。资料变化或不可用会提示待复核，过期草稿不能发布。生成按主题检索相关证据，不保证覆盖所选资料全文；合法引用不能证明全部陈述正确。详情见 [WIKI_ACCEPTANCE.md](WIKI_ACCEPTANCE.md)，开发规范及周期见 [AGENTS.md](AGENTS.md)、[DEVELOPMENT.md](DEVELOPMENT.md)。
+
+## 固定质量样例
+
+在 `packages/backend` 运行 `python tools/evaluate_quality.py validate --split all` 校验60例合成资料，默认开发集40例、封存集20例。支持schema/资产hash/引用/分集校验、已有结果分层汇总和环境预检。完整真实OCR/检索/模型评测适配器与人工基线仍未完成，不能把离线校验当作真实质量达标。使用方法见 [evaluation/README.md](packages/backend/evaluation/README.md)。

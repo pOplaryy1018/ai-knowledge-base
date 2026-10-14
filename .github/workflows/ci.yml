@@ -66,8 +66,9 @@ jobs:
       - run: pip install -r requirements-dev.lock.txt
       - run: python -m alembic upgrade head
       - run: python -m pytest -q
-      - run: python -m ruff check app tests
+      - run: python -m ruff check app tests tools evaluation
       - run: python -m mypy app
+      - run: python tools/evaluate_quality.py validate --split all
       - run: python -m alembic upgrade head --sql > /tmp/migration.sql
       - run: docker compose config --quiet
         working-directory: .

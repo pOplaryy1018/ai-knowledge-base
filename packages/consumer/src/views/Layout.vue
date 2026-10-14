@@ -21,6 +21,13 @@ function handleLogout() {
       </div>
 
       <nav class="sidebar-nav">
+        <router-link
+          :class="['nav-item', { active: isActive('/workspace/wiki') }]"
+          to="/workspace/wiki"
+          style="display: block; text-decoration: none"
+        >
+          LLM Wiki
+        </router-link>
         <div
           :class="['nav-item', { active: isActive('/workspace/knowledge-bases') }]"
           @click="router.push('/workspace/knowledge-bases')"

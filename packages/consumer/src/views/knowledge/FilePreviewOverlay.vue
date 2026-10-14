@@ -2,7 +2,9 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { IconLeft, IconClose, IconCopy, IconDownload } from '@arco-design/web-vue/es/icon'
 import { Message } from '@arco-design/web-vue'
-import { previewFile, getRawFileUrl } from '@/api/import'
+import { previewFile, getRawFile } from '@/api/import'
+import { getAuthGeneration } from '@/api/client'
+import { createRequestScope } from '@/utils/request-scope'
 import type { KnowledgeFile, KnowledgeFilePreview } from '@akb/shared'
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js/lib/common'
@@ -15,6 +17,22 @@ const loading = ref(false)
 const error = ref('')
 const preview = ref<KnowledgeFilePreview | null>(null)
 const copied = ref(false)
+const rawUrl = ref('')
+const scope = createRequestScope()
+const downloadScope = createRequestScope()
+let copyTimer: ReturnType<typeof setTimeout> | undefined
+
+function clearPreview() {
+  scope.dispose()
+  downloadScope.dispose()
+  if (rawUrl.value) URL.revokeObjectURL(rawUrl.value)
+  rawUrl.value = ''
+  preview.value = null
+  error.value = ''
+  loading.value = false
+  copied.value = false
+  clearTimeout(copyTimer)
+}
 
 const md = new MarkdownIt({
   html: false, linkify: true, breaks: true,
@@ -48,23 +66,28 @@ function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-function getRawUrl(): string {
-  if (!props.file) return ''
-  const token = localStorage.getItem('akb_access_token') || ''
-  return getRawFileUrl(props.file.knowledge_base_id, props.file.id, token)
-}
-
 async function load() {
-  if (!props.file) return
+  clearPreview()
+  const file = props.file
+  if (!props.visible || !file) return
+  const ticket = scope.begin(file.id)
+  const generation = getAuthGeneration()
+  const isCurrent = () => ticket.isCurrent() && generation === getAuthGeneration()
   loading.value = true
-  error.value = ''
-  preview.value = null
   try {
-    preview.value = await previewFile(props.file.knowledge_base_id, props.file.id)
+    const result = await previewFile(file.knowledge_base_id, file.id, ticket.signal)
+    if (!isCurrent()) return
+    if (result.content_type === 'image') {
+      const blob = await getRawFile(file.knowledge_base_id, file.id, ticket.signal)
+      if (!isCurrent()) return
+      rawUrl.value = URL.createObjectURL(blob)
+    }
+    preview.value = result
   } catch (e: any) {
+    if (!isCurrent()) return
     error.value = e?.response?.data?.detail || e?.message || '加载失败'
   } finally {
-    loading.value = false
+    if (isCurrent()) loading.value = false
   }
 }
 
@@ -74,16 +97,34 @@ async function handleCopy() {
     await navigator.clipboard.writeText(preview.value.content)
     copied.value = true
     Message.success('已复制到剪贴板')
-    setTimeout(() => { copied.value = false }, 2000)
+    copyTimer = setTimeout(() => { copied.value = false }, 2000)
   } catch {
     Message.error('复制失败')
   }
 }
 
-function handleDownload() {
-  const token = localStorage.getItem('akb_access_token') || ''
-  if (props.file) {
-    window.open(getRawFileUrl(props.file.knowledge_base_id, props.file.id, token), '_blank')
+async function handleDownload() {
+  const file = props.file
+  if (!props.visible || !file) return
+  const ticket = downloadScope.begin(file.id)
+  const generation = getAuthGeneration()
+  const isCurrent = () => ticket.isCurrent() && generation === getAuthGeneration()
+  try {
+    const blob = await getRawFile(file.knowledge_base_id, file.id, ticket.signal)
+    if (!isCurrent()) return
+    const url = URL.createObjectURL(blob)
+    try {
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = file.original_filename
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+    } finally {
+      URL.revokeObjectURL(url)
+    }
+  } catch (e: any) {
+    if (isCurrent()) Message.error(e?.message || '下载失败')
   }
 }
 
@@ -95,12 +136,13 @@ function handleBackdropClick() {
   emit('close')
 }
 
-watch(() => props.visible, (v) => {
-  if (v) load()
-})
+watch([() => props.visible, () => props.file?.knowledge_base_id, () => props.file?.id], () => {
+  void load()
+}, { immediate: true })
+watch(getAuthGeneration, () => { clearPreview(); emit('close') }, { flush: 'sync' })
 
 onMounted(() => document.addEventListener('keydown', handleKeydown))
-onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
+onUnmounted(() => { clearPreview(); document.removeEventListener('keydown', handleKeydown) })
 </script>
 
 <template>
@@ -174,7 +216,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
           class="preview-image-wrapper"
         >
           <img
-            :src="getRawUrl()"
+            :src="rawUrl"
             :alt="file?.original_filename"
             class="preview-image"
           >

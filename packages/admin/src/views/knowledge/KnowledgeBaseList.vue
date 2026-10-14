@@ -100,62 +100,64 @@ async function handleDialogSubmit(data: KnowledgeBaseCreate | KnowledgeBaseUpdat
           :data="items"
           :stripe="true"
         >
-          <a-table-column
-            data-index="name"
-            title="名称"
-            :width="200"
-          />
-          <a-table-column
-            data-index="description"
-            title="描述"
-            :width="250"
-            ellipsis
-          >
-            <template #cell="{ record }">
-              {{ record.description || '暂无描述' }}
-            </template>
-          </a-table-column>
-          <a-table-column
-            data-index="user_id"
-            title="所属用户"
-            :width="280"
-            ellipsis
-          />
-          <a-table-column
-            title="创建时间"
-            :width="180"
-          >
-            <template #cell="{ record }">
-              {{ new Date(record.created_at).toLocaleString('zh-CN') }}
-            </template>
-          </a-table-column>
-          <a-table-column
-            title="操作"
-            :width="160"
-            fixed="right"
-          >
-            <template #cell="{ record }">
-              <a-button
-                size="small"
-                @click="openEdit(record)"
-              >
-                <template #icon>
-                  <IconEdit />
-                </template>
-                编辑
-              </a-button>
-              <a-button
-                size="small"
-                status="danger"
-                @click="confirmDelete(record.id, record.name)"
-              >
-                <template #icon>
-                  <IconDelete />
-                </template>
-                删除
-              </a-button>
-            </template>
-          </a-table-column>
+          <template #columns>
+            <a-table-column
+              data-index="name"
+              title="名称"
+              :width="200"
+            />
+            <a-table-column
+              data-index="description"
+              title="描述"
+              :width="250"
+              ellipsis
+            >
+              <template #cell="{ record }">
+                {{ record.description || '暂无描述' }}
+              </template>
+            </a-table-column>
+            <a-table-column
+              data-index="user_id"
+              title="所属用户"
+              :width="280"
+              ellipsis
+            />
+            <a-table-column
+              title="创建时间"
+              :width="180"
+            >
+              <template #cell="{ record }">
+                {{ new Date(record.created_at).toLocaleString('zh-CN') }}
+              </template>
+            </a-table-column>
+            <a-table-column
+              title="操作"
+              :width="160"
+              fixed="right"
+            >
+              <template #cell="{ record }">
+                <a-button
+                  size="small"
+                  @click="openEdit(record)"
+                >
+                  <template #icon>
+                    <IconEdit />
+                  </template>
+                  编辑
+                </a-button>
+                <a-button
+                  size="small"
+                  status="danger"
+                  @click="confirmDelete(record.id, record.name)"
+                >
+                  <template #icon>
+                    <IconDelete />
+                  </template>
+                  删除
+                </a-button>
+              </template>
+            </a-table-column>
+          </template>
         </a-table>
         <a-empty
           v-else
@@ -188,7 +190,7 @@ async function handleDialogSubmit(data: KnowledgeBaseCreate | KnowledgeBaseUpdat
     <KnowledgeBaseDialog
       :visible="dialogVisible"
       :editing="editing"
-      @cancel="dialogVisible = false"
+      @close="dialogVisible = false"
       @submit="handleDialogSubmit"
     />
   </div>

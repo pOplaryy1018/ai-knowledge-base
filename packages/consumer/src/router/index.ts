@@ -26,6 +26,18 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
     children: [
       {
+        path: 'wiki',
+        name: 'WikiWorkbench',
+        component: () => import('@/views/wiki/WikiWorkbench.vue'),
+        meta: { title: 'LLM Wiki' },
+      },
+      {
+        path: 'wiki/:id',
+        name: 'WikiDetail',
+        component: () => import('@/views/wiki/WikiDetail.vue'),
+        meta: { title: 'Wiki 页面' },
+      },
+      {
         path: 'knowledge-bases',
         name: 'KnowledgeBaseList',
         component: () => import('@/views/knowledge/KnowledgeBaseList.vue'),

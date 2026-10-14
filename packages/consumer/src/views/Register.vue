@@ -38,7 +38,8 @@ const rules = {
 }
 
 async function handleRegister() {
-  try { await formRef.value?.validate() } catch { return }
+  if (!formRef.value) return
+  try { if (await formRef.value.validate()) return } catch { return }
 
   loading.value = true
   try {

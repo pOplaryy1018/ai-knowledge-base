@@ -1,0 +1,13 @@
+---
+description: Python 后端、评测与独立测试数据库规范
+globs: packages/backend/**/*.py
+alwaysApply: false
+---
+
+- 使用 Python 3.12 与锁定依赖，类型完整并通过 Ruff/Mypy。
+- 复用现有解析、检索、引用及版本入口，不在评测器另写一套生产链路。
+- 新行为先写失败测试；权限、错误版本、无效引用必须有边界用例。
+- 测试数据库限独立 `akb_evidence_test`，不接业务库，不自动迁移业务数据。
+- 网络/模型调用必须有超时和次数/样例预算；报告不含凭据或原始异常中的秘密。
+- 样例固定 hash/commit、组级分集；未知质量指标用 null，带实际分母。
+- 禁止把替身结果记为真实 OCR、embedding 或 LLM 基线。

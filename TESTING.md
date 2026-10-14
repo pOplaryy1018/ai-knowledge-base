@@ -77,3 +77,20 @@ API：`POST /api/sources`的kind为image；`POST /api/sources/{id}/image-revisio
 ## GitHub Actions隔离回归
 
 Quality gates的backend job在Ubuntu/Python 3.12运行。工作流提供独立PostgreSQL+pgvector和Redis服务，迁移成功后运行完整pytest（含TEST_DATABASE_URL集成测试）、Ruff、完整Mypy及离线迁移/Compose配置检查。NTFS junction测试仅在Windows运行；Linux保留POSIX符号链接测试。数据库名固定为akb_evidence_test，不能替换为业务库。
+
+## LLM Wiki 与接手回归
+
+Wiki的操作、版本保护、API失败行为、迁移和真实模型小样例边界见 [WIKI_ACCEPTANCE.md](WIKI_ACCEPTANCE.md)。离线评测校验在CI执行：`python tools/evaluate_quality.py validate --split all`；默认只统计开发集，封存集需显式选择。统计观测必须携带生成时的dataset_hash，错版本在汇总前拒绝。
+
+浏览器回归需要Playwright与可用的Chrome；可用 `PLAYWRIGHT_MODULE` 指向已有模块。用户端测试服务器默认54184、管理端54183，均须先启动；它们使用合成HTTP替身，不能当作模型质量或后端全栈验收：
+
+```powershell
+node tests/e2e/wiki-browser.cjs
+$env:COMPARISON_OUTPUT='docs/acceptance/comparison-browser'
+node tests/e2e/comparison-browser.cjs
+node tests/e2e/legacy-preview-browser.cjs
+$env:ADMIN_CONSUMER_UI_URL='http://127.0.0.1:54184'
+node packages/admin/tests/browser-regressions.cjs
+```
+
+旧流程回归覆盖文件预览A/B晚响应、关闭/账号变化清屏、认证图片Blob与URL回收、过期令牌刷新、空表单不提交、有效表单仍提交、管理端取消后重开、统计筛选参数/图表/Top表及分享链接精确Agent选择。旧文件raw端点仍只支持图片；本轮没有扩大兼容入口的非图片原件下载范围。

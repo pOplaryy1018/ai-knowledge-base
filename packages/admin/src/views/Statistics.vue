@@ -39,12 +39,12 @@ async function loadKbOptions() {
 loadKbOptions()
 
 // ── 数据查询 ──
-const { data: itemsByType, isLoading: typeLoading } = useItemsByType(selectedKbId.value)
-const { data: itemsTrend, isLoading: trendLoading } = useItemsTrend(days.value, selectedKbId.value)
-const { data: chatTrend, isLoading: chatLoading } = useChatTrend(days.value)
-const { data: topItems, isLoading: topLoading } = useTopItems(20, selectedKbId.value)
+const { data: itemsByType, isLoading: typeLoading } = useItemsByType(selectedKbId)
+const { data: itemsTrend, isLoading: trendLoading } = useItemsTrend(days, selectedKbId)
+const { data: chatTrend, isLoading: chatLoading } = useChatTrend(days)
+const { data: topItems, isLoading: topLoading } = useTopItems(20, selectedKbId)
 // 词云组件待实现，查询结果暂未绑定到视图
-useTagsWordcloud(selectedKbId.value)
+useTagsWordcloud(selectedKbId)
 
 // ── 条目趋势折线图 ──
 const itemsTrendOption = computed(() => ({
@@ -164,11 +164,14 @@ function handlePresetChange(val: number | string | boolean | undefined) {
             :loading="trendLoading"
             :animation="true"
           >
-            <v-chart
-              :option="itemsTrendOption"
-              style="height: 320px"
-              autoresize
-            />
+            <a-skeleton-line :rows="6" />
+            <template #content>
+              <v-chart
+                :option="itemsTrendOption"
+                style="height: 320px"
+                autoresize
+              />
+            </template>
           </a-skeleton>
         </a-card>
       </a-col>
@@ -181,11 +184,14 @@ function handlePresetChange(val: number | string | boolean | undefined) {
             :loading="chatLoading"
             :animation="true"
           >
-            <v-chart
-              :option="chatTrendOption"
-              style="height: 320px"
-              autoresize
-            />
+            <a-skeleton-line :rows="6" />
+            <template #content>
+              <v-chart
+                :option="chatTrendOption"
+                style="height: 320px"
+                autoresize
+              />
+            </template>
           </a-skeleton>
         </a-card>
       </a-col>
@@ -205,11 +211,14 @@ function handlePresetChange(val: number | string | boolean | undefined) {
             :loading="typeLoading"
             :animation="true"
           >
-            <v-chart
-              :option="typePieOption"
-              style="height: 320px"
-              autoresize
-            />
+            <a-skeleton-line :rows="6" />
+            <template #content>
+              <v-chart
+                :option="typePieOption"
+                style="height: 320px"
+                autoresize
+              />
+            </template>
           </a-skeleton>
         </a-card>
       </a-col>
@@ -222,34 +231,39 @@ function handlePresetChange(val: number | string | boolean | undefined) {
             :loading="topLoading"
             :animation="true"
           >
-            <a-table
-              :data="topItems ?? []"
-              :stripe="true"
-              style="max-height:320px"
-            >
-              <template #empty>
-                <a-empty description="暂无数据" />
-              </template>
-              <a-table-column
-                title="#"
-                :width="50"
+            <a-skeleton-line :rows="6" />
+            <template #content>
+              <a-table
+                :data="topItems ?? []"
+                :stripe="true"
+                style="max-height:320px"
               >
-                <template #cell="{ rowIndex }">
-                  {{ rowIndex + 1 }}
+                <template #empty>
+                  <a-empty description="暂无数据" />
                 </template>
-              </a-table-column>
-              <a-table-column
-                data-index="title"
-                title="知识标题"
-                ellipsis
-              />
-              <a-table-column
-                data-index="count"
-                title="引用次数"
-                :width="100"
-                :sortable="{ sortDirections: ['ascend', 'descend'] }"
-              />
-            </a-table>
+                <template #columns>
+                  <a-table-column
+                    title="#"
+                    :width="50"
+                  >
+                    <template #cell="{ rowIndex }">
+                      {{ rowIndex + 1 }}
+                    </template>
+                  </a-table-column>
+                  <a-table-column
+                    data-index="title"
+                    title="知识标题"
+                    ellipsis
+                  />
+                  <a-table-column
+                    data-index="count"
+                    title="引用次数"
+                    :width="100"
+                    :sortable="{ sortDirections: ['ascend', 'descend'] }"
+                  />
+                </template>
+              </a-table>
+            </template>
           </a-skeleton>
         </a-card>
       </a-col>

@@ -1,0 +1,12 @@
+---
+description: Vue 与共享协议开发规范
+globs: packages/consumer/**/*,packages/admin/**/*,packages/shared/**/*
+alwaysApply: false
+---
+
+- Vue 3 Composition API 与 `script setup`，保持严格 TypeScript。
+- 共享 API/SSE 类型放 `packages/shared`，服务端状态沿用 Vue Query。
+- 请求取消、登录态变化、过期响应及空/错误/加载状态必须处理。
+- Markdown 维持转义与清理；原件下载和图片预览必须携带认证。
+- 引用展示来源、位置、版本与 OCR/校正/描述渠道；不得暗示未经验证的正确性。
+- 复用现有组件和布局，改动后通过测试、lint、双端类型检查和构建。

@@ -1,0 +1,2 @@
+Synthetic fixture group-mixed-01 current
+Retention days: 91.

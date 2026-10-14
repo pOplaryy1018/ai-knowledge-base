@@ -13,5 +13,6 @@ from app.models.source import (
 )
 from app.models.source_publication import SourcePublication
 from app.models.user import User
+from app.models.wiki import WikiPage, WikiRevision
 
-__all__ = ["SourcePublication", "Base", "User", "KnowledgeBase", "KnowledgeFile", "KnowledgeItem", "Agent", "Conversation", "Message", "ImportTask", "Source", "SourceRevision", "SourceDocument", "SourceSyncTask", "SourceChangeEvent", "SavedAnswer", "AnswerRevision", "AnswerEvidence", "ImpactReview", "AssetCleanup"]
+__all__ = ["WikiPage", "WikiRevision", "SourcePublication", "Base", "User", "KnowledgeBase", "KnowledgeFile", "KnowledgeItem", "Agent", "Conversation", "Message", "ImportTask", "Source", "SourceRevision", "SourceDocument", "SourceSyncTask", "SourceChangeEvent", "SavedAnswer", "AnswerRevision", "AnswerEvidence", "ImpactReview", "AssetCleanup"]

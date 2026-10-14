@@ -89,8 +89,16 @@ async function handleSubmit() {
 }
 
 // ── 分享链接复制 ──
+function getChatLink(agentId: string) {
+  const consumerOrigin = new URL(window.location.origin)
+  consumerOrigin.port = '54174'
+  const url = new URL('/workspace/chat', consumerOrigin)
+  url.searchParams.set('agent_id', agentId)
+  return url.toString()
+}
+
 function copyShareLink(agentId: string) {
-  const link = `http://localhost:5174/chat/${agentId}`
+  const link = getChatLink(agentId)
   navigator.clipboard.writeText(link).then(
     () => Message.success('分享链接已复制到剪贴板'),
     () => Message.info(link),
@@ -99,7 +107,7 @@ function copyShareLink(agentId: string) {
 
 // ── 对话测试 ──
 function goChat(agentId: string) {
-  window.open(`http://localhost:5174/chat/${agentId}`, '_blank')
+  window.open(getChatLink(agentId), '_blank', 'noopener,noreferrer')
 }
 
 // ── 知识条目 ID 输入 ──
@@ -161,88 +169,90 @@ function removeKnowledgeId(index: number) {
           :data="filteredItems"
           :stripe="true"
         >
-          <a-table-column
-            data-index="name"
-            title="名称"
-            :width="150"
-          />
-          <a-table-column
-            data-index="description"
-            title="描述"
-            :width="200"
-            ellipsis
-          >
-            <template #cell="{ record }">
-              {{ record.description || '暂无描述' }}
-            </template>
-          </a-table-column>
-          <a-table-column
-            title="关联条目"
-            :width="120"
-            align="center"
-          >
-            <template #cell="{ record }">
-              <a-tag
-                size="small"
-                color="arcoblue"
-              >
-                {{ record.knowledge_ids.length }} 条
-              </a-tag>
-            </template>
-          </a-table-column>
-          <a-table-column
-            title="创建时间"
-            :width="180"
-          >
-            <template #cell="{ record }">
-              {{ new Date(record.created_at).toLocaleString('zh-CN') }}
-            </template>
-          </a-table-column>
-          <a-table-column
-            title="操作"
-            :width="300"
-            fixed="right"
-          >
-            <template #cell="{ record }">
-              <a-button
-                size="small"
-                @click="copyShareLink(record.id)"
-              >
-                <template #icon>
-                  <IconLink />
-                </template>
-                复制链接
-              </a-button>
-              <a-button
-                size="small"
-                @click="goChat(record.id)"
-              >
-                <template #icon>
-                  <IconMessage />
-                </template>
-                对话测试
-              </a-button>
-              <a-button
-                size="small"
-                @click="openEdit(record)"
-              >
-                <template #icon>
-                  <IconEdit />
-                </template>
-                编辑
-              </a-button>
-              <a-button
-                size="small"
-                status="danger"
-                @click="confirmDelete(record.id, record.name)"
-              >
-                <template #icon>
-                  <IconDelete />
-                </template>
-                删除
-              </a-button>
-            </template>
-          </a-table-column>
+          <template #columns>
+            <a-table-column
+              data-index="name"
+              title="名称"
+              :width="150"
+            />
+            <a-table-column
+              data-index="description"
+              title="描述"
+              :width="200"
+              ellipsis
+            >
+              <template #cell="{ record }">
+                {{ record.description || '暂无描述' }}
+              </template>
+            </a-table-column>
+            <a-table-column
+              title="关联条目"
+              :width="120"
+              align="center"
+            >
+              <template #cell="{ record }">
+                <a-tag
+                  size="small"
+                  color="arcoblue"
+                >
+                  {{ record.knowledge_ids.length }} 条
+                </a-tag>
+              </template>
+            </a-table-column>
+            <a-table-column
+              title="创建时间"
+              :width="180"
+            >
+              <template #cell="{ record }">
+                {{ new Date(record.created_at).toLocaleString('zh-CN') }}
+              </template>
+            </a-table-column>
+            <a-table-column
+              title="操作"
+              :width="300"
+              fixed="right"
+            >
+              <template #cell="{ record }">
+                <a-button
+                  size="small"
+                  @click="copyShareLink(record.id)"
+                >
+                  <template #icon>
+                    <IconLink />
+                  </template>
+                  复制链接
+                </a-button>
+                <a-button
+                  size="small"
+                  @click="goChat(record.id)"
+                >
+                  <template #icon>
+                    <IconMessage />
+                  </template>
+                  对话测试
+                </a-button>
+                <a-button
+                  size="small"
+                  @click="openEdit(record)"
+                >
+                  <template #icon>
+                    <IconEdit />
+                  </template>
+                  编辑
+                </a-button>
+                <a-button
+                  size="small"
+                  status="danger"
+                  @click="confirmDelete(record.id, record.name)"
+                >
+                  <template #icon>
+                    <IconDelete />
+                  </template>
+                  删除
+                </a-button>
+              </template>
+            </a-table-column>
+          </template>
         </a-table>
         <a-empty
           v-else
@@ -278,7 +288,10 @@ function removeKnowledgeId(index: number) {
       :width="560"
       @cancel="dialogVisible = false"
     >
-      <a-form layout="vertical" :model="formData">
+      <a-form
+        layout="vertical"
+        :model="formData"
+      >
         <a-form-item
           label="Agent 名称"
           required

@@ -1,0 +1,3 @@
+# Evaluation digests bind exact bytes across Windows and Linux checkouts.
+packages/backend/evaluation/assets/** -text
+packages/backend/evaluation/cases.jsonl -text

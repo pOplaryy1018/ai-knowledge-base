@@ -27,6 +27,7 @@ bcrypt==4.0.1
 pdfplumber>=0.11.0
 python-docx>=1.1.0
 markdown>=3.7.0
+markdown-it-py==4.2.0
 
 # ── 图片 OCR ──
 pytesseract>=0.3.10

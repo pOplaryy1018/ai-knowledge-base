@@ -1,7 +1,7 @@
 /**
  * 统计面板 — TanStack Query Hooks
  */
-import { computed } from 'vue'
+import { computed, toValue } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import {
   getOverviewStats,
@@ -13,7 +13,7 @@ import {
   getTagsWordcloud} from '@/api/statistics'
 import { queryKeys } from './queryKeys'
 
-import type { MaybeRef } from 'vue'
+import type { MaybeRef, MaybeRefOrGetter } from 'vue'
 
 // ── 概览统计 ──
 export function useOverviewStats(enabled: MaybeRef<boolean> = true) {
@@ -33,41 +33,41 @@ export function useRecentActivities(limit = 10, enabled: MaybeRef<boolean> = tru
 }
 
 // ── 条目类型分布 ──
-export function useItemsByType(kbId?: string, enabled: MaybeRef<boolean> = true) {
+export function useItemsByType(kbId?: MaybeRefOrGetter<string | undefined>, enabled: MaybeRef<boolean> = true) {
   return useQuery({
-    queryKey: computed(() => queryKeys.statistics.itemsByType(kbId)),
-    queryFn: () => getItemsByType(kbId),
+    queryKey: computed(() => queryKeys.statistics.itemsByType(toValue(kbId))),
+    queryFn: () => getItemsByType(toValue(kbId)),
     enabled})
 }
 
 // ── 条目增长趋势 ──
-export function useItemsTrend(days = 30, kbId?: string, enabled: MaybeRef<boolean> = true) {
+export function useItemsTrend(days: MaybeRefOrGetter<number> = 30, kbId?: MaybeRefOrGetter<string | undefined>, enabled: MaybeRef<boolean> = true) {
   return useQuery({
-    queryKey: computed(() => queryKeys.statistics.itemsTrend(days, kbId)),
-    queryFn: () => getItemsTrend(days, kbId),
+    queryKey: computed(() => queryKeys.statistics.itemsTrend(toValue(days), toValue(kbId))),
+    queryFn: () => getItemsTrend(toValue(days), toValue(kbId)),
     enabled})
 }
 
 // ── 问答活跃趋势 ──
-export function useChatTrend(days = 30, enabled: MaybeRef<boolean> = true) {
+export function useChatTrend(days: MaybeRefOrGetter<number> = 30, enabled: MaybeRef<boolean> = true) {
   return useQuery({
-    queryKey: computed(() => queryKeys.statistics.chatTrend(days)),
-    queryFn: () => getChatTrend(days),
+    queryKey: computed(() => queryKeys.statistics.chatTrend(toValue(days))),
+    queryFn: () => getChatTrend(toValue(days)),
     enabled})
 }
 
 // ── 热门知识 Top N ──
-export function useTopItems(limit = 20, kbId?: string, enabled: MaybeRef<boolean> = true) {
+export function useTopItems(limit: MaybeRefOrGetter<number> = 20, kbId?: MaybeRefOrGetter<string | undefined>, enabled: MaybeRef<boolean> = true) {
   return useQuery({
-    queryKey: computed(() => queryKeys.statistics.topItems(limit, kbId)),
-    queryFn: () => getTopItems(limit, kbId),
+    queryKey: computed(() => queryKeys.statistics.topItems(toValue(limit), toValue(kbId))),
+    queryFn: () => getTopItems(toValue(limit), toValue(kbId)),
     enabled})
 }
 
 // ── 标签词云 ──
-export function useTagsWordcloud(kbId?: string, enabled: MaybeRef<boolean> = true) {
+export function useTagsWordcloud(kbId?: MaybeRefOrGetter<string | undefined>, enabled: MaybeRef<boolean> = true) {
   return useQuery({
-    queryKey: computed(() => queryKeys.statistics.tagsWordcloud(kbId)),
-    queryFn: () => getTagsWordcloud(kbId),
+    queryKey: computed(() => queryKeys.statistics.tagsWordcloud(toValue(kbId))),
+    queryFn: () => getTagsWordcloud(toValue(kbId)),
     enabled})
 }

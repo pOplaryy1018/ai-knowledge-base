@@ -36,7 +36,8 @@ watch(() => props.visible, (v) => {
 })
 
 async function handleSubmit() {
-  try { await formRef.value?.validate() } catch { return }
+  if (!formRef.value) return
+  try { if (await formRef.value.validate()) return } catch { return }
   emit('submit', { name: form.name, description: form.description || undefined })
 }
 </script>

@@ -13,6 +13,7 @@ from app.api.image_source_api import router as image_source_router
 from app.api.import_api import router as import_router
 from app.api.scoped_chat_api import router as scoped_chat_router
 from app.api.source_api import router as source_router
+from app.api.wiki_api import router as wiki_router
 from app.core.config import settings
 from app.core.db import engine
 from app.core.redis import close_redis, init_redis
@@ -65,6 +66,7 @@ app.include_router(source_router, prefix="/api")
 app.include_router(image_source_router, prefix="/api")
 app.include_router(answer_router, prefix="/api")
 app.include_router(scoped_chat_router, prefix="/api")
+app.include_router(wiki_router, prefix="/api")
 
 
 @app.get("/")

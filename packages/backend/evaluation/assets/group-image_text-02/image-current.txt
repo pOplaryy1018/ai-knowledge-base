@@ -1,0 +1,2 @@
+Synthetic fixture group-image_text-02 current
+Retention days: 72.

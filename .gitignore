@@ -42,6 +42,7 @@ pgdata/
 uploads/
 /packages/backend/models/
 temp/
+tmp/
 
 # ── 日志 ──
 *.log
