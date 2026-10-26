@@ -35,6 +35,12 @@ class Settings(BaseSettings):
     # ── Redis ──
     redis_url: str = ""
 
+    # ── 派生图谱 ──
+    neo4j_uri: str = ""
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = ""
+    graph_extractor_version: str = "graph-v1"
+
     # ── JWT ──
     jwt_secret_key: str = "dev-secret-change-in-production"
     jwt_algorithm: str = "HS256"
@@ -54,7 +60,7 @@ class Settings(BaseSettings):
     # ── LLM ──
     llm_api_key: str = ""
     llm_base_url: str = "https://api.deepseek.com"
-    llm_model: str = "deepseek-chat"
+    llm_model: str = "deepseek-flash"
 
     @model_validator(mode="after")
     def validate_production(self) -> Self:
@@ -66,6 +72,8 @@ class Settings(BaseSettings):
             password = make_url(self.database_url).password
             if not password or len(password) < 12 or password == "devpassword":
                 raise ValueError("Production requires a non-default database password of at least 12 characters")
+            if self.neo4j_uri and (len(self.neo4j_password) < 12 or self.neo4j_password == "devgraphpassword"):
+                raise ValueError("Production requires a non-default Neo4j password of at least 12 characters")
             self.debug = False
         return self
 

@@ -19,3 +19,11 @@ services:
     image: redis:7-alpine
     ports:
       - "127.0.0.1:26379:6379"
+  neo4j:
+    image: neo4j:5.26.32
+    environment:
+      NEO4J_AUTH: neo4j/evidence_test_only
+    ports:
+      - "127.0.0.1:27687:7687"
+    tmpfs:
+      - /data
