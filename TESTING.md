@@ -4,7 +4,7 @@
 
 ## 测试数据库
 
-根目录运行 `docker compose -f compose.test.yml up -d`。这是独立项目 akb-evidence-tests，PostgreSQL 使用 25432，Redis 使用 26379，不复用业务数据。数据库使用 tmpfs，停止容器后可能丢失，不能用作正式资料库。
+根目录运行 `docker compose -f compose.test.yml up -d`。这是独立项目 akb-evidence-tests，PostgreSQL 使用 25432，Redis 使用 26379，Neo4j Bolt 使用 27687，不复用业务数据。PostgreSQL 与 Neo4j 测试数据使用 tmpfs，停止容器后可能丢失，不能用作正式资料库。
 
 在 packages/backend 的 PowerShell 中，仅为本次进程设置：
 
@@ -12,13 +12,17 @@
 $env:DATABASE_URL='postgresql+asyncpg://evidence_test:evidence_test_only@127.0.0.1:25432/akb_evidence_test'
 $env:TEST_DATABASE_URL=$env:DATABASE_URL
 $env:REDIS_URL='redis://127.0.0.1:26379/0'
+$env:NEO4J_URI='bolt://127.0.0.1:27687'
+$env:NEO4J_USER='neo4j'
+$env:NEO4J_PASSWORD='evidence_test_only'
+$env:TEST_NEO4J_URI=$env:NEO4J_URI
 python -m alembic upgrade head
 python -m pytest -q
 python -m ruff check app tests
 python -m mypy app
 ```
 
-集成测试没有 TEST_DATABASE_URL 时会跳过；跳过不算数据库验收。保护规则只允许 localhost/127.0.0.1 的 akb_evidence_test。
+集成测试没有 TEST_DATABASE_URL 时会跳过；图谱集成测试没有 TEST_NEO4J_URI 时也会跳过。跳过不算对应数据库验收。保护规则只允许 localhost/127.0.0.1 的 akb_evidence_test 与测试 Bolt 端口 27687。
 
 根目录运行 `pnpm test`、`pnpm typecheck`、`pnpm lint`、`pnpm build:admin`、`pnpm build:consumer`。开发端口为 54173 和 54174。
 

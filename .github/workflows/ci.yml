@@ -47,6 +47,17 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20
+      neo4j:
+        image: neo4j:5.26.32
+        env:
+          NEO4J_AUTH: neo4j/evidence_test_only
+        ports:
+          - 27687:7687
+        options: >-
+          --health-cmd "cypher-shell -u neo4j -p evidence_test_only 'RETURN 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
     defaults:
       run:
         working-directory: packages/backend
@@ -55,6 +66,10 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://evidence_test:evidence_test_only@127.0.0.1:5432/akb_evidence_test
       TEST_DATABASE_URL: postgresql+asyncpg://evidence_test:evidence_test_only@127.0.0.1:5432/akb_evidence_test
       REDIS_URL: redis://localhost:6379/0
+      NEO4J_URI: bolt://127.0.0.1:27687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: evidence_test_only
+      TEST_NEO4J_URI: bolt://127.0.0.1:27687
       JWT_SECRET_KEY: ci-only-key-with-at-least-32-characters
     steps:
       - uses: actions/checkout@v4
