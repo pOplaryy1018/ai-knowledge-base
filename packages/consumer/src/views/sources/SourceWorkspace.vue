@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import SourceImagePanel from '@/components/SourceImagePanel.vue'
-import type { SourceTask } from '@akb/shared'
+import type { SourceGraphStatus, SourceTask } from '@akb/shared'
 import type { Source, SourceRevision, SourceDocument } from '@akb/shared'
 import { getApiClient } from '@/api/client'
 import {
@@ -9,6 +9,8 @@ import {
   createSource,
   uploadRevision,
   getSourceTask,
+  getSourceGraph,
+  retrySourceGraph,
   listRevisions,
   archiveSource,
   downloadOriginal,
@@ -62,6 +64,39 @@ const name = ref(''),
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 const signal = controller.signal
 const selectionScope = createRequestScope()
+const graphScope = createRequestScope()
+const graphStatus = ref<SourceGraphStatus>()
+let graphTimer: ReturnType<typeof setTimeout> | undefined
+function graphLabel(state: SourceGraphStatus['status']) {
+  return ({ not_ready: '等待资料发布', not_indexed: '当前版本尚无关系索引', pending: '等待构建',
+    processing: '正在构建', completed: '已就绪', failed: '构建失败' } as const)[state]
+}
+async function loadGraph(sourceId: string) {
+  const request = graphScope.begin(sourceId)
+  if (graphTimer) clearTimeout(graphTimer)
+  try {
+    const result = await getSourceGraph(sourceId, request.signal)
+    request.apply(() => {
+      if (selected.value?.id !== sourceId) return
+      graphStatus.value = result
+      if (result.status === 'pending' || result.status === 'processing') {
+        graphTimer = setTimeout(() => { void loadGraph(sourceId) }, 3000)
+      }
+    })
+  } catch (e) {
+    request.apply(() => { error.value = errorMessage(e) })
+  }
+}
+async function retryGraph() {
+  const sourceId = selected.value?.id
+  if (!sourceId) return
+  await act(async () => {
+    const request = graphScope.begin(sourceId)
+    const result = await retrySourceGraph(sourceId, request.signal)
+    request.apply(() => { graphStatus.value = result })
+    await loadGraph(sourceId)
+  })
+}
 function syncLabel(state: string) {
   return (
     (
@@ -95,6 +130,8 @@ async function select(source: Source) {
   scopeEditRequest.begin(source.id)
   scopePaths.value = (source.config?.include_paths || []).join(', ')
   selected.value = source
+  graphStatus.value = undefined
+  void loadGraph(source.id)
   revisions.value = []
   status.value = ''
   documentScope.begin(source.id)
@@ -298,6 +335,8 @@ onUnmounted(() => {
   selectionScope.dispose()
   documentScope.dispose()
   scopeEditRequest.dispose()
+  graphScope.dispose()
+  if (graphTimer) clearTimeout(graphTimer)
   for (const timer of timers.values()) clearTimeout(timer)
   timers.clear()
 })
@@ -474,6 +513,21 @@ onUnmounted(() => {
           </a-popconfirm>
         </a-space><a-alert v-if="status">
           同步状态：{{ status }}
+        </a-alert>
+        <a-alert
+          v-if="graphStatus"
+          :type="graphStatus.status === 'failed' ? 'warning' : 'info'"
+        >
+          关系检索：{{ graphLabel(graphStatus.status) }}
+          <span v-if="graphStatus.status === 'completed'"> · {{ graphStatus.relation_count }} 条关系</span>
+          <a-button
+            v-if="graphStatus.status === 'failed'"
+            size="mini"
+            :disabled="busy"
+            @click="retryGraph"
+          >
+            重试构建
+          </a-button>
         </a-alert>
         <a-alert
           v-if="

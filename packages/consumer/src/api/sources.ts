@@ -1,4 +1,4 @@
-import type { Source, SourceRevision, SourceTask, SourceDocument } from '@akb/shared'
+import type { Source, SourceRevision, SourceTask, SourceDocument, SourceGraphStatus } from '@akb/shared'
 import { getApiClient } from './client'
 export async function listSources(signal?: AbortSignal) {
   return (await getApiClient().get<{ items: Source[] }>('/sources', { signal })).data.items
@@ -24,6 +24,12 @@ export async function uploadRevision(id: string, file: File, signal?: AbortSigna
 }
 export async function getSourceTask(id: string, signal?: AbortSignal) {
   return (await getApiClient().get<SourceTask>(`/source-tasks/${id}`, { signal })).data
+}
+export async function getSourceGraph(id: string, signal?: AbortSignal) {
+  return (await getApiClient().get<SourceGraphStatus>(`/sources/${id}/graph`, { signal })).data
+}
+export async function retrySourceGraph(id: string, signal?: AbortSignal) {
+  return (await getApiClient().post<SourceGraphStatus>(`/sources/${id}/graph/retry`, {}, { signal })).data
 }
 export async function listRevisions(id: string, signal?: AbortSignal) {
   return (

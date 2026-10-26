@@ -43,6 +43,15 @@ export interface SourceTask {
   stage?: string
   error?: string | null
 }
+export interface SourceGraphStatus {
+  source_id: string
+  revision_id: string | null
+  status: 'not_ready' | 'not_indexed' | 'pending' | 'processing' | 'completed' | 'failed'
+  attempts: number
+  relation_count: number
+  rejected_count: number
+  error_code: string | null
+}
 export interface SourceCitation {
   index: number
   source_id: string
