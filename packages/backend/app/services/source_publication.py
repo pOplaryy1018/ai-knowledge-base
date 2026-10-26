@@ -7,6 +7,8 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
+from app.models.graph_task import GraphBuildTask
 from app.models.knowledge import KnowledgeItem
 from app.models.source import Source, SourceChangeEvent, SourceDocument, SourceRevision
 from app.models.source_publication import SourcePublication
@@ -80,5 +82,11 @@ async def publish_revision(session: AsyncSession, source_id: str, revision_id: s
     event = SourceChangeEvent(source_id=source_id, old_revision_id=expected_head,
                               new_revision_id=revision_id, publication_id=publication.id)
     session.add(event)
+    graph_task = (await session.execute(select(GraphBuildTask).where(
+        GraphBuildTask.revision_id == revision.id,
+        GraphBuildTask.extractor_version == settings.graph_extractor_version))).scalar_one_or_none()
+    if graph_task is None:
+        session.add(GraphBuildTask(source_id=source.id, revision_id=revision.id, user_id=source.user_id,
+                                   extractor_version=settings.graph_extractor_version))
     await session.flush()
     return event

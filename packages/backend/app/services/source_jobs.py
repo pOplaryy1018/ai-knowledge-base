@@ -153,6 +153,7 @@ async def process_source_import(ctx: Any, task_id: str) -> dict[str, str]:
 
 
 async def source_maintenance(ctx: Any) -> None:
+    from app.services.graph_jobs import process_graph_cleanup, recover_graph_tasks
     from app.services.source_cleanup import retry_source_cleanup
 
     async with async_session() as session:
@@ -172,5 +173,16 @@ async def source_maintenance(ctx: Any) -> None:
             # The durable pending row is retried next tick; unrelated recovery must continue.
             logger.warning("Source task enqueue failed; will retry: %s", task_id)
     await process_impact_events()
+    async with async_session() as session:
+        graph_pending = await recover_graph_tasks(session)
+        await session.commit()
+    for task_id, attempt in graph_pending:
+        try:
+            await ctx["redis"].enqueue_job("process_graph_build", task_id, _job_id=f"graph:{task_id}:{attempt}")
+        except Exception:
+            logger.warning("Graph task enqueue failed; will retry: %s", task_id)
+    async with async_session() as session:
+        await process_graph_cleanup(session)
+        await session.commit()
     async with async_session() as session:
         await retry_source_cleanup(session)

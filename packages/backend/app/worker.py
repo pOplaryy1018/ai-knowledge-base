@@ -11,6 +11,7 @@ from langchain_text_splitters import Language, RecursiveCharacterTextSplitter
 
 from app.core.config import settings
 from app.services.file_types import CODE_EXTS
+from app.services.graph_jobs import process_graph_build
 from app.services.import_tasks import finish_import, update_task
 from app.services.parser import parse_file
 from app.services.source_jobs import process_source_import, source_maintenance
@@ -63,7 +64,7 @@ async def on_worker_startup(ctx: Any) -> None:
 
 class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
-    functions = [process_import, process_source_import]
+    functions = [process_import, process_source_import, process_graph_build]
     cron_jobs = [cron(source_maintenance, minute=set(range(60)), second=0)]
     on_startup = on_worker_startup
     max_jobs = 1

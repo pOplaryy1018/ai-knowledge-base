@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.answer_api import router as answer_router
+from app.api.graph_api import router as graph_router
 from app.api.health import router as health_router
 from app.api.image_source_api import router as image_source_router
 from app.api.import_api import router as import_router
@@ -24,6 +25,7 @@ from app.routers.file import router as file_router
 from app.routers.knowledge import router as knowledge_router
 from app.routers.statistics import router as statistics_router
 from app.seed import seed_admin
+from app.services.graph_store import close_driver
 
 
 @asynccontextmanager
@@ -35,6 +37,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
     # 关闭时释放资源
     await close_redis()
+    await close_driver()
     await engine.dispose()
 
 
@@ -63,6 +66,7 @@ app.include_router(chat_router, prefix="/api")
 app.include_router(file_router, prefix="/api")
 app.include_router(statistics_router, prefix="/api")
 app.include_router(source_router, prefix="/api")
+app.include_router(graph_router, prefix="/api")
 app.include_router(image_source_router, prefix="/api")
 app.include_router(answer_router, prefix="/api")
 app.include_router(scoped_chat_router, prefix="/api")

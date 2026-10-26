@@ -7,6 +7,7 @@
 - 📄 **多格式文档导入**：支持 PDF、DOC/DOCX、Markdown、TXT、代码、JSON/YAML，持久化导入状态并支持失败重试
 - 🖼️ **图片 OCR**：自动识别图片中的中文/英文文字内容
 - 🔍 **向量化检索**：基于 sentence-transformers 的文本向量化 + pgvector 向量存储
+- 🕸️ **关系检索**：已发布资料异步抽取有原文依据的实体关系，Neo4j 与 pgvector 并行补充问答证据
 - 🤖 **AI 智能对话**：结合知识库上下文的 RAG 问答，支持流式 SSE 推送
 - 📝 **LLM Wiki**：从已发布资料编译主题草稿，人工编辑发布、双向链接、原文版本引用、来源变化提示、修订历史及 Markdown 导出
 - 📊 **统计面板**：知识条目趋势、对话趋势、热门知识排行等数据可视化
@@ -27,6 +28,7 @@
 | ORM | SQLAlchemy 2.1 (async) | 依赖版本以锁文件为准 |
 | 数据校验 | Pydantic V2 | 类型安全配置与校验 |
 | 数据库 | PostgreSQL 16 + pgvector | 向量存储 |
+| 派生图谱 | Neo4j 5.26 | 实体关系索引，原文与权限仍由 PostgreSQL 核验 |
 | 缓存 / 队列 | Redis 7 + arq | 异步任务队列 |
 | LLM | OpenAI 兼容接口 | 默认 DeepSeek，可替换 |
 | OCR | Tesseract | 中英文图片文字识别 |
@@ -56,6 +58,7 @@ ai-knowledge-base/
 - **Python** 3.12（与后端依赖锁和容器一致）
 - **PostgreSQL 16** + **pgvector** 扩展
 - **Redis** 7
+- **Neo4j** 5.26（关系检索；不可用时现有向量检索继续工作）
 - **Tesseract OCR**（可选，用于图片识别）
 
 ### 快速启动（Docker Compose）
@@ -112,6 +115,8 @@ pnpm dev:consumer
 |------|------|------|
 | `DATABASE_URL` | PostgreSQL 连接串 | `postgresql+asyncpg://admin:password@localhost:15432/ai_knowledge` |
 | `REDIS_URL` | Redis 连接地址 | `redis://localhost:16379/0` |
+| `NEO4J_URI` | 图谱 Bolt 地址 | `bolt://localhost:17687` |
+| `NEO4J_USER` / `NEO4J_PASSWORD` | 图谱认证 | 在本地和生产环境分别配置 |
 | `JWT_SECRET_KEY` | JWT 签名密钥 | 随机长字符串 |
 | `LLM_API_KEY` | LLM API 密钥 | `sk-xxx`（需自行申请） |
 | `LLM_BASE_URL` | LLM API 地址 | `https://api.deepseek.com` |

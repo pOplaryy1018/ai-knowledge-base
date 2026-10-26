@@ -45,6 +45,9 @@ async def setup_schema(driver: AsyncDriver | None = None) -> None:
             f"CREATE CONSTRAINT {name} IF NOT EXISTS FOR (node:{label}) REQUIRE node.id IS UNIQUE",
             database_="neo4j",
         )
+    await graph.execute_query(
+        "CREATE INDEX graph_relation_scope IF NOT EXISTS FOR (r:GraphRelation) "
+        "ON (r.user_id, r.revision_id, r.build_id)", database_="neo4j")
 
 
 async def write_projection(build_id: str, user_id: str, source_id: str, revision_id: str,
@@ -104,7 +107,7 @@ async def find_candidate_chunk_ids(user_id: str, revision_builds: dict[str, str]
         RETURN DISTINCT r.item_id AS item_id, r.source_id AS source_id,
                r.revision_id AS revision_id, r.build_id AS build_id
         LIMIT $limit""",
-        builds=builds, user_id=user_id, question=question, limit=min(limit, 50), database_="neo4j",
+        builds=builds, user_id=user_id, question=_normal_name(question), limit=min(limit, 50), database_="neo4j",
     )
     return [GraphCandidate(row["item_id"], row["source_id"], row["revision_id"], row["build_id"], rank)
             for rank, row in enumerate(records, 1)]
@@ -120,7 +123,7 @@ async def delete_source(user_id: str, source_id: str, *, driver: AsyncDriver | N
     graph = driver or get_driver()
     await graph.execute_query(
         """MATCH (r:GraphRelation {user_id:$user_id, source_id:$source_id})
-        WITH collect(r.build_id) AS builds
+        WITH collect(DISTINCT r.build_id) AS builds
         UNWIND builds AS build_id
         MATCH (node) WHERE node.build_id=build_id
         DETACH DELETE node""", user_id=user_id, source_id=source_id, database_="neo4j",

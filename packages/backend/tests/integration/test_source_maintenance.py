@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.models.source import Source, SourceSyncTask
-from app.services import source_cleanup, source_jobs
+from app.services import graph_jobs, source_cleanup, source_jobs
 
 
 @pytest.fixture
@@ -66,3 +66,13 @@ async def test_busy_tasks_do_not_hide_recoverable_tasks(db_session, owner_kb, ma
     assert stale.status == "failed"
     assert source.active_task_id is None
     assert any(call.args[1] == pending.id for call in redis.enqueue_job.await_args_list)
+
+
+async def test_graph_maintenance_uses_the_same_isolated_session(maintenance, monkeypatch):
+    @asynccontextmanager
+    async def forbidden_session():
+        raise AssertionError("graph maintenance escaped the isolated session")
+        yield
+
+    monkeypatch.setattr(graph_jobs, "async_session", forbidden_session)
+    await source_jobs.source_maintenance({"redis": AsyncMock()})

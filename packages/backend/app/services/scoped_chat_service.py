@@ -14,8 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import async_session
 from app.models.agent import Conversation, Message
 from app.models.source import Source, SourceDocument, SourceRevision
+from app.services.graph_search import retrieve_version_evidence
 from app.services.llm_service import stream_generate
-from app.services.search_service import hybrid_search_versions
 
 INSUFFICIENT = "所选资料中没有足够的相关证据，无法据此回答。"
 
@@ -43,7 +43,7 @@ def cited_evidence(answer: str, evidence: list[dict[str, Any]]) -> list[dict[str
 
 
 async def prepare_evidence(question: str, versions: dict[str, str], user_id: str) -> list[dict[str, Any]]:
-    results = await hybrid_search_versions(versions, question, user_id=user_id)
+    results = await retrieve_version_evidence(versions, question, user_id=user_id)
     evidence = []
     async with async_session() as session:
         for index, result in enumerate(results, 1):

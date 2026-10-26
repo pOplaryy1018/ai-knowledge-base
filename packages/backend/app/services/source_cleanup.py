@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.agent import Message
 from app.models.answer import AnswerEvidence, ImpactReview, SavedAnswer
 from app.models.asset_cleanup import AssetCleanup
+from app.models.graph_task import GraphBuildTask, GraphCleanup
 from app.models.knowledge import KnowledgeItem
 from app.models.source import (
     Source,
@@ -32,6 +33,12 @@ async def redact_source(session: AsyncSession, source_id: str) -> list[str]:
     if source is None:
         return []
     source.deleted_at = datetime.now(timezone.utc)
+    cleanup = (await session.execute(select(GraphCleanup).where(GraphCleanup.source_id == source_id))).scalar_one_or_none()
+    if cleanup is None:
+        session.add(GraphCleanup(source_id=source_id, user_id=source.user_id))
+    await session.execute(update(GraphBuildTask).where(
+        GraphBuildTask.source_id == source_id, GraphBuildTask.status.in_(["pending", "processing"]))
+        .values(status="failed", lease_until=None, error_code="source_deleted"))
     source.current_revision_id = None
     source.current_publication_id = None
     source.active_task_id = None
