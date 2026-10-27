@@ -181,6 +181,66 @@ async def test_document_history_rollback_creates_new_publication_and_rejects_sta
     assert (await client.get("/api/sources")).json()["items"][0]["current_revision_id"] == first["revision_id"]
 
 
+async def test_graph_visualization_tracks_document_rollback(lifecycle_client, db_session, monkeypatch):
+    import json
+    import os
+
+    from sqlalchemy import select
+
+    from app.api import source_api
+    from app.core.config import settings
+    from app.models.graph_task import GraphBuildTask
+    from app.services import graph_extraction, graph_jobs, graph_store, graph_visualization
+    from app.services.source_jobs import process_source_import
+
+    uri = os.environ.get("TEST_NEO4J_URI")
+    if not uri:
+        pytest.skip("TEST_NEO4J_URI missing; graph rollback integration not verified")
+    assert uri in {"bolt://127.0.0.1:27687", "bolt://localhost:27687"}
+    monkeypatch.setattr(settings, "neo4j_uri", uri)
+    monkeypatch.setattr(settings, "neo4j_user", "neo4j")
+    monkeypatch.setattr(settings, "neo4j_password", "evidence_test_only")
+    monkeypatch.setattr(settings, "llm_api_key", "synthetic-test-only")
+    monkeypatch.setattr(graph_jobs, "async_session", source_api.async_session)
+    monkeypatch.setattr(graph_visualization, "async_session", source_api.async_session)
+
+    async def synthetic_extraction(content):
+        target = "乙公司" if "乙公司" in content else "丙公司"
+        return json.dumps({"relations": [{"subject": "甲公司", "subject_type": "组织", "predicate": "收购",
+                                          "object": target, "object_type": "组织", "quote": content}]}, ensure_ascii=False)
+
+    monkeypatch.setattr(graph_extraction, "_generate_relation_json", synthetic_extraction)
+    client, user, kb = lifecycle_client
+    source = (await client.post("/api/sources", json={"name": "graph history", "knowledge_base_id": kb.id})).json()
+    source_id = source["id"]
+    revisions = []
+    try:
+        for target in ("乙公司", "丙公司"):
+            task = (await client.post(f"/api/sources/{source_id}/revisions", files={
+                "file": ("policy.txt", f"甲公司收购{target}。", "text/plain")})).json()
+            assert (await process_source_import({}, task["task_id"]))["status"] == "completed"
+            revisions.append(task["revision_id"])
+            build = (await db_session.execute(select(GraphBuildTask).where(
+                GraphBuildTask.revision_id == task["revision_id"]))).scalar_one()
+            assert (await graph_jobs.process_graph_build({}, build.id))["status"] == "completed"
+            graph = await client.get(f"/api/sources/{source_id}/graph/relations")
+            assert graph.status_code == 200, graph.text
+            assert graph.json()["items"][0]["object"] == target
+        history = (await client.get(f"/api/sources/{source_id}/publications")).json()["items"]
+        rollback = await client.post(f"/api/sources/{source_id}/rollback", json={
+            "target_revision_id": revisions[0], "expected_publication_id": history[0]["id"]})
+        assert rollback.status_code == 200, rollback.text
+        graph = await client.get(f"/api/sources/{source_id}/graph/relations")
+        assert graph.status_code == 200, graph.text
+        assert [(row["revision_id"], row["object"], row["quote"]) for row in graph.json()["items"]] == [
+            (revisions[0], "乙公司", "甲公司收购乙公司。")]
+        assert len((await db_session.execute(select(GraphBuildTask).where(
+            GraphBuildTask.source_id == source_id))).scalars().all()) == 2
+    finally:
+        await graph_store.delete_source(user.id, source_id)
+        await graph_store.close_driver()
+
+
 async def test_rollback_rejects_other_owner_source_and_unavailable_original(lifecycle_client, db_session, tmp_path):
     import uuid
     from datetime import datetime, timezone
