@@ -44,12 +44,17 @@ def cited_evidence(answer: str, evidence: list[dict[str, Any]]) -> list[dict[str
 
 async def prepare_evidence(question: str, versions: dict[str, str], user_id: str) -> list[dict[str, Any]]:
     results = await retrieve_version_evidence(versions, question, user_id=user_id)
-    evidence = []
+    evidence: list[dict[str, Any]] = []
+    document_ids = {result.item.document_id for result in results if result.item.document_id}
+    if not document_ids:
+        return evidence
     async with async_session() as session:
+        rows = (await session.execute(select(SourceDocument).where(SourceDocument.id.in_(document_ids)))).scalars().all()
+        documents = {document.id: document for document in rows}
         for index, result in enumerate(results, 1):
             item = result.item
-            document = await session.get(SourceDocument, item.document_id)
-            if document is None:
+            document = documents.get(item.document_id) if item.document_id else None
+            if document is None or document.revision_id != item.revision_id:
                 continue
             source_id = next((source for source, revision in versions.items() if revision == item.revision_id), None)
             if source_id is None:
