@@ -100,12 +100,17 @@ async def retrieve_version_evidence(versions: dict[str, str], question: str,
     per_source_limit = top_k if len(versions) == 1 else max(2, (top_k + len(versions) - 1) // len(versions))
     by_source: dict[str, int] = {}
     output: list[SearchResult] = []
+    deferred: list[SearchResult] = []
     for result in ranked:
         source_id = source_for_revision.get(result.item.revision_id or "", "")
         if by_source.get(source_id, 0) >= per_source_limit:
+            deferred.append(result)
             continue
         by_source[source_id] = by_source.get(source_id, 0) + 1
         output.append(result)
         if len(output) >= top_k:
             break
+    if len(output) < top_k:
+        output.extend(deferred[:top_k - len(output)])
+        output.sort(key=lambda result: (-result.score, result.item.id))
     return output
