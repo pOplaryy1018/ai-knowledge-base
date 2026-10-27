@@ -70,13 +70,24 @@ async def prepare_evidence(question: str, versions: dict[str, str], user_id: str
             document = documents.get(item.document_id) if item.document_id else None
             if document is None or document.revision_id != item.revision_id:
                 continue
+            chunk_locator: Any = item.locator or {}
+            document_locator: Any = document.locator
+            if not isinstance(chunk_locator, dict) or not isinstance(document_locator, dict):
+                continue
+            start, end = chunk_locator.get("char_start"), chunk_locator.get("char_end")
+            if (not item.content.strip() or type(start) is not int or type(end) is not int or start < 0 or end > len(document.text)
+                    or end != start + len(item.content) or document.text[start:end] != item.content):
+                continue
             source_id = next((source for source, revision in versions.items() if revision == item.revision_id), None)
             if source_id is None:
                 continue
             evidence.append({"index": index, "content": item.content, "quote": item.content,
                              "knowledge_title": item.title, "source_id": source_id, "revision_id": item.revision_id,
                              "document_id": item.document_id,
-                             "locator": {**document.locator, **(item.locator or {}), "logical_path": document.logical_path}})
+                             "locator": {**document_locator, "logical_path": document.logical_path,
+                                         "char_start": start, "char_end": end,
+                                         "line_start": document.text.count("\n", 0, start) + 1,
+                                         "line_end": document.text.count("\n", 0, end) + 1}})
     return evidence
 
 

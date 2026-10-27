@@ -35,7 +35,8 @@ async def comparison_scope(db_session, owner_kb, monkeypatch):
         db_session.add(document)
         await db_session.flush()
         db_session.add(KnowledgeItem(knowledge_base_id=kb.id, revision_id=revision.id, document_id=document.id,
-                                     title=name, content=text, embedding=[1.0] * 1024))
+                                     title=name, content=text, embedding=[1.0] * 1024,
+                                     locator={"char_start": 0, "char_end": len(text)}))
         versions[source.id] = revision.id
     await db_session.flush()
     @asynccontextmanager

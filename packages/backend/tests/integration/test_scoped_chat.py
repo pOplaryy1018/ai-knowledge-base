@@ -114,7 +114,8 @@ async def test_version_search_authorized_document_pairs(db_session, source, monk
     db_session.add(document)
     await db_session.flush()
     chunk = KnowledgeItem(knowledge_base_id=item.knowledge_base_id, revision_id=revision.id,
-                          document_id=document.id, title="retrieval", content="retrieval fact", embedding=[1.0] * 1024)
+                          document_id=document.id, title="retrieval", content="retrieval fact", embedding=[1.0] * 1024,
+                          locator={"char_start": 0, "char_end": len("retrieval fact")})
     db_session.add(chunk)
     await db_session.flush()
 

@@ -16,11 +16,11 @@ async def test_evidence_documents_are_loaded_once_and_mismatched_revision_is_rej
     from app.services import scoped_chat_service as service
 
     items = [
-        SimpleNamespace(document_id="doc-a", revision_id="rev-a", content="first", title="A", locator={}),
+        SimpleNamespace(document_id="doc-a", revision_id="rev-a", content="first", title="A", locator={"char_start": 0, "char_end": 5}),
         SimpleNamespace(document_id="doc-b", revision_id="rev-a", content="wrong", title="B", locator={}),
     ]
     documents = [
-        SimpleNamespace(id="doc-a", revision_id="rev-a", locator={}, logical_path="a.txt"),
+        SimpleNamespace(id="doc-a", revision_id="rev-a", text="first", locator={}, logical_path="a.txt"),
         SimpleNamespace(id="doc-b", revision_id="rev-other", locator={}, logical_path="b.txt"),
     ]
     result = MagicMock()
@@ -38,6 +38,39 @@ async def test_evidence_documents_are_loaded_once_and_mismatched_revision_is_rej
     assert [entry["quote"] for entry in evidence] == ["first"]
     assert evidence[0]["locator"]["logical_path"] == "a.txt"
     session.execute.assert_awaited_once()
+
+
+@pytest.mark.parametrize(("content", "locator", "valid"), [
+    ("原文", {"char_start": 1, "char_end": 3}, True),
+    ("伪造", {"char_start": 1, "char_end": 3}, False),
+    ("原文", {"char_start": 1, "char_end": 4}, False),
+    ("原文", {"char_start": True, "char_end": 3}, False),
+    ("原文", {"char_start": -1, "char_end": 1}, False),
+    ("", {"char_start": 1, "char_end": 1}, False),
+    ("原文", {}, False),
+    ("原文", [1, 3], False),
+])
+async def test_retrieval_chunk_must_match_original_and_trusted_origin(monkeypatch, content, locator, valid):
+    from app.services import scoped_chat_service as service
+
+    item = SimpleNamespace(document_id="doc", revision_id="rev", content=content, title="A",
+                           locator={**locator, "origin": "image_ocr"} if isinstance(locator, dict) else locator)
+    document = SimpleNamespace(id="doc", revision_id="rev", text="前原文后", logical_path="manual_description",
+                               locator={"origin": "manual_description"})
+    rows = MagicMock()
+    rows.scalars.return_value.all.return_value = [document]
+    session = AsyncMock()
+    session.execute.return_value = rows
+    context = MagicMock()
+    context.__aenter__ = AsyncMock(return_value=session)
+    context.__aexit__ = AsyncMock(return_value=None)
+    monkeypatch.setattr(service, "async_session", lambda: context)
+    monkeypatch.setattr(service, "retrieve_version_evidence", AsyncMock(return_value=[SimpleNamespace(item=item)]))
+    evidence = await service.prepare_evidence("question", {"source": "rev"}, "owner")
+    assert bool(evidence) is valid
+    if valid:
+        assert evidence[0]["quote"] == "原文"
+        assert evidence[0]["locator"]["origin"] == "manual_description"
 
 
 @pytest.mark.parametrize(("answer", "citations", "expected"), [

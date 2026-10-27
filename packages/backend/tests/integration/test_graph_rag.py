@@ -81,6 +81,11 @@ async def test_graph_recall_yields_original_citation_and_ignores_old_version(db_
         assert evidence[0]["revision_id"] == revision.id
         assert evidence[0]["document_id"] == document.id
         assert evidence[0]["locator"]["logical_path"] == "one.txt"
+        item.content = "不属于原文的伪造内容"
+        await db_session.flush()
+        assert await scoped_chat_service.prepare_evidence("甲公司收购了谁？", {source.id: revision.id}, user.id) == []
+        item.content = quote
+        await db_session.flush()
         assert await graph_search.retrieve_version_evidence(
             {source.id: revision.id}, "甲公司", str(uuid.uuid4())) == []
         next_revision = SourceRevision(source_id=source.id, raw_hash=uuid.uuid4().hex,
