@@ -72,6 +72,22 @@ async def create_comparison(client, versions):
     return events[-1][1]["message_id"], next(data for event, data in events if event == "comparison"), next(data for event, data in events if event == "citations")
 
 
+async def test_shared_embedding_failure_keeps_source_specific_keyword_evidence(comparison_scope, monkeypatch):
+    user, versions = comparison_scope
+    calls = 0
+
+    async def unavailable(_question):
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("synthetic embedding failure")
+
+    monkeypatch.setattr(comparison_service, "encode_texts", unavailable)
+    evidence = await comparison_service.prepare_comparison_evidence("比较事务", versions, user.id)
+    assert calls == 1
+    assert {entry["source_id"] for entry in evidence} == set(versions)
+    assert [entry["index"] for entry in evidence] == list(range(1, len(evidence) + 1))
+
+
 async def test_http_save_reload_candidate_and_adoption(client, db_session, comparison_scope):
     user, versions = comparison_scope
     message_id, artifact, citations = await create_comparison(client, versions)
