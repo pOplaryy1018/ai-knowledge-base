@@ -19,6 +19,19 @@ class GraphCandidate:
     route_rank: int
 
 
+@dataclass(frozen=True)
+class GraphRelationPointer:
+    id: str
+    item_id: str
+    subject: str
+    subject_type: str
+    predicate: str
+    object: str
+    object_type: str
+    quote_start: int
+    quote_end: int
+
+
 def get_driver() -> AsyncDriver:
     global _driver
     if _driver is None:
@@ -111,6 +124,26 @@ async def find_candidate_chunk_ids(user_id: str, revision_builds: dict[str, str]
     )
     return [GraphCandidate(row["item_id"], row["source_id"], row["revision_id"], row["build_id"], rank)
             for rank, row in enumerate(records, 1)]
+
+
+async def list_projection_relations(user_id: str, source_id: str, revision_id: str,
+                                    build_id: str, limit: int, *, driver: AsyncDriver | None = None) -> list[GraphRelationPointer]:
+    if limit <= 0:
+        return []
+    graph = driver or get_driver()
+    records, _, _ = await graph.execute_query(
+        """MATCH (s:GraphMention)-[:SUBJECT_OF]->(r:GraphRelation {
+            user_id:$user_id, source_id:$source_id, revision_id:$revision_id, build_id:$build_id
+        })-[:OBJECT_OF]->(o:GraphMention)
+        WHERE s.build_id=$build_id AND o.build_id=$build_id
+        RETURN r.id AS id, r.item_id AS item_id, s.name AS subject, s.entity_type AS subject_type,
+               r.predicate AS predicate, o.name AS object, o.entity_type AS object_type,
+               r.quote_start AS quote_start, r.quote_end AS quote_end
+        ORDER BY r.id LIMIT $limit""",
+        user_id=user_id, source_id=source_id, revision_id=revision_id, build_id=build_id,
+        limit=min(limit, 51), database_="neo4j",
+    )
+    return [GraphRelationPointer(**dict(row)) for row in records]
 
 
 async def delete_build(build_id: str, *, driver: AsyncDriver | None = None) -> None:

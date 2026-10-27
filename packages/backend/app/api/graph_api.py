@@ -3,7 +3,7 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 
 from app.api.source_api import owned_source
@@ -12,6 +12,8 @@ from app.core.db import async_session
 from app.core.security import get_current_user
 from app.models.graph_task import GraphBuildTask
 from app.models.user import User
+from app.schemas.graph import GraphRelationsResponse
+from app.services.graph_visualization import list_source_relations
 
 router = APIRouter(tags=["资料图谱"])
 
@@ -38,6 +40,12 @@ async def graph_status(source_id: uuid.UUID, user: User = Depends(get_current_us
             GraphBuildTask.revision_id == source.current_revision_id,
             GraphBuildTask.extractor_version == settings.graph_extractor_version))).scalar_one_or_none()
         return _status(source.id, source.current_revision_id, task)
+
+
+@router.get("/sources/{source_id}/graph/relations", response_model=GraphRelationsResponse)
+async def graph_relations(source_id: uuid.UUID, limit: int = Query(50, ge=1, le=50),
+                          user: User = Depends(get_current_user)) -> dict[str, Any]:
+    return await list_source_relations(str(source_id), user.id, limit)
 
 
 @router.post("/sources/{source_id}/graph/retry", status_code=202)

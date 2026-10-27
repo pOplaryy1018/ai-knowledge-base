@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import SourceImagePanel from '@/components/SourceImagePanel.vue'
 import SourceHistoryPanel from '@/components/SourceHistoryPanel.vue'
+import SourceGraphPanel from '@/components/SourceGraphPanel.vue'
 import type { SourceGraphStatus, SourceTask } from '@akb/shared'
 import type { Source, SourceRevision, SourceDocument, SourcePublication } from '@akb/shared'
 import { getApiClient } from '@/api/client'
@@ -565,6 +566,10 @@ onUnmounted(() => {
             重试构建
           </a-button>
         </a-alert>
+        <SourceGraphPanel
+          :source="selected"
+          :status="graphStatus"
+        />
         <a-alert
           v-if="
             (selected.kind === 'git_local' || selected.kind === 'git_public') &&

@@ -59,6 +59,23 @@ export interface SourceGraphStatus {
   rejected_count: number
   error_code: string | null
 }
+export interface SourceGraphRelation {
+  id: string
+  subject: string
+  subject_type: string
+  predicate: string
+  object: string
+  object_type: string
+  quote: string
+  document_id: string
+  revision_id: string
+  locator: Record<string, string | number>
+}
+export interface SourceGraphRelations {
+  revision_id: string
+  items: SourceGraphRelation[]
+  truncated: boolean
+}
 export interface SourceCitation {
   index: number
   source_id: string
