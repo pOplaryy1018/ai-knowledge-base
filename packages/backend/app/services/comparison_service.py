@@ -13,7 +13,7 @@ from app.schemas.comparison import ComparisonDraft
 from app.services.llm_service import stream_generate
 from app.services.scoped_chat_service import (
     evidence_prompt,
-    generate_scoped_answer,
+    generate_from_evidence,
     prepare_evidence,
 )
 from app.services.vectorizer import encode_texts
@@ -145,5 +145,6 @@ async def generate_comparison(question: str, versions: dict[str, str], user_id: 
         artifact, content, citations = build_comparison("".join(chunks), names, evidence, versions)
         return content, citations, artifact, None
     except ValueError:
-        content, citations = await generate_scoped_answer(question, versions, user_id)
+        await source_names(versions, user_id)
+        content, citations = await generate_from_evidence(question, evidence)
         return content, citations, None, "对比格式未通过校验，已改为普通问答。"

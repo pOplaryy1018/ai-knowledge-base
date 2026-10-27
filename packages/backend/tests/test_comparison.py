@@ -191,24 +191,70 @@ async def test_generation_without_evidence_skips_provider(monkeypatch):
 
 async def test_invalid_json_falls_back_to_scoped_text(monkeypatch):
     from app.services import comparison_service as service
-    monkeypatch.setattr(service, "prepare_comparison_evidence", AsyncMock(return_value=evidence()))
+    from app.services import scoped_chat_service as scoped
+    retrieval = AsyncMock(return_value=evidence())
+    monkeypatch.setattr(service, "prepare_comparison_evidence", retrieval)
+    access_check = AsyncMock(return_value={"a": "A", "b": "B"})
+    monkeypatch.setattr(service, "source_names", access_check)
     async def generate(*args, **kwargs):
         yield "invalid JSON"
+    async def ordinary(system, history):
+        assert "[1]" in system
+        assert history == [{"role": "user", "content": "事务"}]
+        yield "普通回答[1]"
     monkeypatch.setattr(service, "stream_generate", generate)
-    fallback = AsyncMock(return_value=("普通回答[1]", [evidence()[0]]))
-    monkeypatch.setattr(service, "generate_scoped_answer", fallback)
+    monkeypatch.setattr(scoped, "stream_generate", ordinary)
+    second_retrieval = AsyncMock(side_effect=AssertionError("must reuse existing evidence"))
+    monkeypatch.setattr(scoped, "prepare_evidence", second_retrieval)
     content, citations, artifact, warning = await generate_comparison("事务", {"a": "va", "b": "vb"}, "owner", {"a": "A", "b": "B"})
     assert content == "普通回答[1]"
     assert artifact is None and warning
     assert citations == [evidence()[0]]
+    retrieval.assert_awaited_once()
+    second_retrieval.assert_not_awaited()
+    access_check.assert_awaited_once_with({"a": "va", "b": "vb"}, "owner")
 
 
 async def test_provider_failure_is_not_relabelled_as_valid_comparison(monkeypatch):
     from app.services import comparison_service as service
     monkeypatch.setattr(service, "prepare_comparison_evidence", AsyncMock(return_value=evidence()))
+    monkeypatch.setattr(service, "source_names", AsyncMock(return_value={"a": "A", "b": "B"}))
     async def generate(*args, **kwargs):
         yield '{"rows":'
         raise RuntimeError("provider interrupted")
     monkeypatch.setattr(service, "stream_generate", generate)
     with pytest.raises(RuntimeError):
         await generate_comparison("事务", {"a": "va", "b": "vb"}, "owner", {"a": "A", "b": "B"})
+
+
+async def test_fallback_provider_failure_does_not_become_a_complete_answer(monkeypatch):
+    from app.services import comparison_service as service
+    from app.services import scoped_chat_service as scoped
+
+    monkeypatch.setattr(service, "prepare_comparison_evidence", AsyncMock(return_value=evidence()))
+    monkeypatch.setattr(service, "source_names", AsyncMock(return_value={"a": "A", "b": "B"}))
+    async def invalid(*args, **kwargs):
+        yield "invalid JSON"
+    async def interrupted(*args, **kwargs):
+        yield "部分回答"
+        raise RuntimeError("provider interrupted")
+    monkeypatch.setattr(service, "stream_generate", invalid)
+    monkeypatch.setattr(scoped, "stream_generate", interrupted)
+    with pytest.raises(RuntimeError, match="provider interrupted"):
+        await generate_comparison("事务", {"a": "va", "b": "vb"}, "owner", {"a": "A", "b": "B"})
+
+
+async def test_fallback_does_not_resend_evidence_if_source_access_is_lost(monkeypatch):
+    from app.services import comparison_service as service
+    from app.services import scoped_chat_service as scoped
+
+    monkeypatch.setattr(service, "prepare_comparison_evidence", AsyncMock(return_value=evidence()))
+    monkeypatch.setattr(service, "source_names", AsyncMock(side_effect=ValueError("资料来源不可用")))
+    async def invalid(*args, **kwargs):
+        yield "invalid JSON"
+    second_call = AsyncMock()
+    monkeypatch.setattr(service, "stream_generate", invalid)
+    monkeypatch.setattr(scoped, "stream_generate", second_call)
+    with pytest.raises(ValueError, match="资料来源不可用"):
+        await generate_comparison("事务", {"a": "va", "b": "vb"}, "owner", {"a": "A", "b": "B"})
+    second_call.assert_not_called()

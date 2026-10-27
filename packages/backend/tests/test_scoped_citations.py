@@ -120,3 +120,21 @@ async def test_interrupted_stream_emits_error_without_citation_diagnostic(monkey
     assert events[-1].startswith("event: error")
     assert not any(event.startswith("event: warning") for event in events)
     assert persist.await_args.args[-1] is False
+
+
+async def test_comparison_fallback_reports_invalid_citations_with_original_warning(monkeypatch):
+    import json
+
+    from app.services import comparison_service
+    from app.services import scoped_chat_service as service
+
+    monkeypatch.setattr(comparison_service, "generate_comparison", AsyncMock(
+        return_value=("普通回答[99]", [], None, "对比格式未通过校验，已改为普通问答。")))
+    monkeypatch.setattr(service, "persist_answer", AsyncMock(return_value="message"))
+    events = [chunk.decode() async for chunk in service.run_comparison_stream(
+        "conversation", "问题", {"source-a": "rev-a", "source-b": "rev-b"}, "owner")]
+    warnings = [json.loads(event.split("data: ", 1)[1])["message"]
+                for event in events if event.startswith("event: warning")]
+    assert len(warnings) == 1
+    assert "对比格式" in warnings[0] and "未匹配" in warnings[0]
+    assert events[-1].startswith("event: done")

@@ -103,6 +103,10 @@ def evidence_prompt(evidence: list[dict[str, Any]]) -> str:
 
 async def generate_scoped_answer(question: str, versions: dict[str, str], user_id: str) -> tuple[str, list[dict[str, Any]]]:
     evidence = await prepare_evidence(question, versions, user_id)
+    return await generate_from_evidence(question, evidence)
+
+
+async def generate_from_evidence(question: str, evidence: list[dict[str, Any]]) -> tuple[str, list[dict[str, Any]]]:
     if not evidence:
         return INSUFFICIENT, []
     chunks = []
@@ -222,6 +226,10 @@ async def run_comparison_stream(conversation_id: str, question: str, versions: d
         return
     yield event("token", {"content": content})
     yield event("citations", citations)
+    if comparison is None:
+        diagnostic = citation_warning(content, citations)
+        if diagnostic:
+            warning = f"{warning} {diagnostic}" if warning else diagnostic
     if warning:
         yield event("warning", {"message": warning})
     if comparison:

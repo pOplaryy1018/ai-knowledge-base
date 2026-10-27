@@ -159,6 +159,27 @@ async def test_provider_interruption_has_no_complete_assistant(client, db_sessio
     assert not (await db_session.execute(select(Message).where(Message.role == "assistant"))).scalars().all()
 
 
+async def test_source_archived_before_fallback_is_not_resent(client, db_session, comparison_scope, monkeypatch):
+    from datetime import UTC, datetime
+
+    _, versions = comparison_scope
+    async def invalid(*args, **kwargs):
+        source = await db_session.get(Source, next(iter(versions)))
+        source.archived_at = datetime.now(UTC)
+        await db_session.flush()
+        yield "invalid JSON"
+    called = False
+    async def ordinary(*args, **kwargs):
+        nonlocal called
+        called = True
+        yield "不可发送"
+    monkeypatch.setattr(comparison_service, "stream_generate", invalid)
+    monkeypatch.setattr(scoped_chat_service, "stream_generate", ordinary)
+    response = await client.post("/api/chat/scoped", json={"question": "比较", "source_ids": list(versions), "response_mode": "comparison"})
+    assert "event: error" in response.text and "event: done" not in response.text
+    assert not called
+
+
 async def test_cancelled_comparison_has_no_assistant(db_session, comparison_scope, monkeypatch):
     user, versions = comparison_scope
     conv, resolved, _ = await scoped_chat_service.prepare_conversation("比较", list(versions), user.id, None)
