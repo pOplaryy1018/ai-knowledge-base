@@ -42,6 +42,18 @@ def cited_evidence(answer: str, evidence: list[dict[str, Any]]) -> list[dict[str
     return [entry for entry in evidence if entry["index"] in indices]
 
 
+def citation_warning(answer: str, citations: list[dict[str, Any]]) -> str | None:
+    if answer.strip() == INSUFFICIENT:
+        return None
+    available = {entry.get("index") for entry in citations if not entry.get("unavailable")}
+    markers = re.findall(r"\[([0-9]+(?:\s*[,，]\s*[0-9]+)*)\]", answer)
+    if any(not re.fullmatch(r"[1-9][0-9]*", marker) or int(marker) not in available for marker in markers):
+        return "回答中可能有未匹配原文的引用标记，请核对。"
+    if not available:
+        return "回答未附可核验原文引用，请核对资料。"
+    return None
+
+
 async def prepare_evidence(question: str, versions: dict[str, str], user_id: str,
                            *, embedding_task: asyncio.Task[Any] | None = None) -> list[dict[str, Any]]:
     results = (await retrieve_version_evidence(versions, question, user_id=user_id, embedding_task=embedding_task)
@@ -175,6 +187,9 @@ async def run_scoped_stream(conversation_id: str, question: str, versions: dict[
         yield event("error", {"message": "回答生成中断，请重试。"})
         return
     yield event("citations", final_citations)
+    warning = citation_warning("".join(chunks), final_citations)
+    if warning:
+        yield event("warning", {"message": warning})
     yield event("done", {"conversation_id": conversation_id, "message_id": message_id})
 
 

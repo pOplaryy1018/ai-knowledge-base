@@ -188,6 +188,12 @@ onUnmounted(() => scope.dispose())
         v-if="candidate"
         title="候选答案（尚未采纳）"
       >
+        <a-alert
+          v-if="candidate.warning"
+          type="warning"
+        >
+          {{ candidate.warning }}
+        </a-alert>
         <p style="white-space: pre-wrap">
           {{ candidate.content }}
         </p>

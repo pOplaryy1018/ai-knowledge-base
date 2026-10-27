@@ -47,6 +47,7 @@ async function checkApp(browser, { base, routePath, role, name, navPath }) {
         sseEvent('meta', { conversation_id: 'conversation-1' }),
         sseEvent('token', { content: '最多重试三次。' }),
         sseEvent('citations', [citation]),
+        sseEvent('warning', { message: '回答中可能有未匹配原文的引用标记，请核对。' }),
         sseEvent('done', { conversation_id: 'conversation-1', message_id: 'message-1' }),
       ].join('') })
     }
@@ -70,6 +71,7 @@ async function checkApp(browser, { base, routePath, role, name, navPath }) {
     await assistant.getByRole('textbox', { name: '向韬韬提问' }).fill('重试上限是多少？')
     await assistant.getByRole('button', { name: /发送/ }).click()
     await assistant.locator('.taotao-answer').getByText('最多重试三次。', { exact: true }).waitFor()
+    await assistant.getByText('回答中可能有未匹配原文的引用标记，请核对。').waitFor()
     assert.deepEqual(calls[0].source_ids, ['source-a', 'source-b'])
     const download = page.waitForEvent('download')
     await assistant.getByRole('button', { name: /合成重试规范.*版本/ }).click()

@@ -14,7 +14,13 @@ from app.main import app
 @pytest.fixture
 async def lifecycle_client(db_session, owner_kb, monkeypatch, tmp_path):
     from app.api import answer_api, source_api
-    from app.services import comparison_service, impact_service, scoped_chat_service, search_service, source_jobs
+    from app.services import (
+        comparison_service,
+        impact_service,
+        scoped_chat_service,
+        search_service,
+        source_jobs,
+    )
 
     user, kb = owner_kb
 
@@ -96,6 +102,26 @@ async def test_document_update_answer_review_and_adoption(lifecycle_client, db_s
     assert "最初的规定" in adopted.json()["versions"][0]["content"]
     duplicate = await client.post(f"/api/sources/{source_id}/revisions", files={"file": ("policy.txt", "更新后的规定", "text/plain")})
     assert duplicate.json()["status"] == "completed"
+
+
+async def test_candidate_reports_unmatched_citation(lifecycle_client, monkeypatch):
+    import json
+
+    from app.services import scoped_chat_service
+    from app.services.source_jobs import process_source_import
+
+    client, _, kb = lifecycle_client
+    source = (await client.post("/api/sources", json={"name": "policy", "knowledge_base_id": kb.id})).json()
+    upload = await client.post(f'/api/sources/{source["id"]}/revisions', files={"file": ("policy.txt", "合成规定", "text/plain")})
+    assert (await process_source_import({}, upload.json()["task_id"]))["status"] == "completed"
+    response = await client.post("/api/chat/scoped", json={"question": "规定是什么", "source_ids": [source["id"]]})
+    events = [json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")]
+    saved = await client.post("/api/answers", json={"message_id": events[-1]["message_id"]})
+    assert saved.status_code == 201, saved.text
+    monkeypatch.setattr(scoped_chat_service, "generate_scoped_answer", AsyncMock(return_value=("答案[99]", [])))
+    candidate = await client.post(f'/api/answers/{saved.json()["id"]}/candidates')
+    assert candidate.status_code == 201, candidate.text
+    assert "未匹配" in candidate.json()["warning"]
 
 
 async def test_failed_sync_keeps_previous_published_head(lifecycle_client, monkeypatch):

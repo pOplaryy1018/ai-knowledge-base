@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.services.scoped_chat_service import cited_evidence
 
 
@@ -36,3 +38,52 @@ async def test_evidence_documents_are_loaded_once_and_mismatched_revision_is_rej
     assert [entry["quote"] for entry in evidence] == ["first"]
     assert evidence[0]["locator"]["logical_path"] == "a.txt"
     session.execute.assert_awaited_once()
+
+
+@pytest.mark.parametrize(("answer", "citations", "expected"), [
+    ("有依据[1]", [{"index": 1}], None),
+    ("有依据[1]，但另有[99]", [{"index": 1}], "未匹配"),
+    ("组合标记[1,2]", [], "未匹配"),
+    ("未提供标记", [], "未附"),
+    ("所选资料中没有足够的相关证据，无法据此回答。", [], None),
+])
+def test_citation_diagnostics_are_cautious(answer, citations, expected):
+    from app.services import scoped_chat_service as service
+
+    assert hasattr(service, "citation_warning")
+    warning = service.citation_warning(answer, citations)
+    assert (expected in warning) if expected else warning is None
+
+
+async def test_scoped_stream_emits_warning_for_unmatched_reference(monkeypatch):
+    import json
+
+    from app.services import scoped_chat_service as service
+
+    async def generate(_prompt, _history):
+        yield "有依据[1]，另一个标记[99]"
+
+    monkeypatch.setattr(service, "prepare_evidence", AsyncMock(return_value=[{"index": 1, "knowledge_title": "测试", "content": "原文"}]))
+    monkeypatch.setattr(service, "stream_generate", generate)
+    monkeypatch.setattr(service, "persist_answer", AsyncMock(return_value="message"))
+    events = [chunk.decode() async for chunk in service.run_scoped_stream("conversation", "问题", {"a": "v"}, [], "owner")]
+    warning = next(event for event in events if event.startswith("event: warning"))
+    assert "未匹配" in json.loads(warning.split("data: ", 1)[1])["message"]
+    assert events[-1].startswith("event: done")
+
+
+async def test_interrupted_stream_emits_error_without_citation_diagnostic(monkeypatch):
+    from app.services import scoped_chat_service as service
+
+    async def generate(_prompt, _history):
+        yield "尚未完成[99]"
+        raise RuntimeError("synthetic failure")
+
+    monkeypatch.setattr(service, "prepare_evidence", AsyncMock(return_value=[{"index": 1, "knowledge_title": "测试", "content": "原文"}]))
+    monkeypatch.setattr(service, "stream_generate", generate)
+    persist = AsyncMock(return_value="message")
+    monkeypatch.setattr(service, "persist_answer", persist)
+    events = [chunk.decode() async for chunk in service.run_scoped_stream("conversation", "问题", {"a": "v"}, [], "owner")]
+    assert events[-1].startswith("event: error")
+    assert not any(event.startswith("event: warning") for event in events)
+    assert persist.await_args.args[-1] is False

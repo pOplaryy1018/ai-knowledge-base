@@ -50,7 +50,11 @@ async def answer(answer_id: UUID, user: User = Depends(get_current_user)) -> dic
 
 @router.post("/answers/{answer_id}/candidates", status_code=201)
 async def candidate(answer_id: UUID, user: User = Depends(get_current_user)) -> dict[str, Any]:
-    from app.services.scoped_chat_service import generate_scoped_answer, resolve_scope
+    from app.services.scoped_chat_service import (
+        citation_warning,
+        generate_scoped_answer,
+        resolve_scope,
+    )
 
     async with async_session() as session:
         saved = await owned_answer(session, user.id, str(answer_id))
@@ -69,6 +73,10 @@ async def candidate(answer_id: UUID, user: User = Depends(get_current_user)) -> 
             content, citations = await generate_scoped_answer(question, versions, user.id)
         if not content.strip():
             raise ValueError("模型返回空答案")
+        if comparison is None:
+            diagnostic = citation_warning(content, citations)
+            if diagnostic:
+                warning = f"{warning} {diagnostic}" if warning else diagnostic
     except Exception as error:
         raise HTTPException(502, "候选生成失败，原答案已保留") from error
     async with async_session() as session:

@@ -328,7 +328,7 @@ onUnmounted(() => {
             {{ reply.warning }}
           </div>
           <div
-            v-if="reply.done && !reply.citations.length"
+            v-if="reply.done && !reply.citations.length && !reply.warning"
             class="taotao-no-evidence"
           >
             此回答没有可核验的原文引用，请谨慎使用。
