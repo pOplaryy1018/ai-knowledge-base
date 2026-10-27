@@ -1,5 +1,7 @@
 """Authorized independent dense/keyword retrieval with reciprocal rank fusion."""
 
+import asyncio
+import logging
 from dataclasses import dataclass
 
 import jieba
@@ -8,6 +10,8 @@ from sqlalchemy import case, literal, or_, select
 from app.core.db import async_session
 from app.models.knowledge import KnowledgeBase, KnowledgeItem
 from app.services.vectorizer import encode_texts
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -66,7 +70,6 @@ async def hybrid_search_versions(versions: dict[str, str], query: str, top_k: in
 
     if not versions:
         return []
-    vector = (await encode_texts(query)).tolist()
     base = (select(KnowledgeItem)
             .join(SourceDocument, KnowledgeItem.document_id == SourceDocument.id)
             .join(SourceRevision, KnowledgeItem.revision_id == SourceRevision.id)
@@ -75,19 +78,41 @@ async def hybrid_search_versions(versions: dict[str, str], query: str, top_k: in
                    Source.user_id == user_id, Source.archived_at.is_(None), Source.deleted_at.is_(None),
                    SourceRevision.state == "ready", KnowledgeItem.status == "available",
                    or_(*(and_(Source.id == source, SourceRevision.id == revision) for source, revision in versions.items()))))
-    results: dict[str, SearchResult] = {}
-    async with async_session() as session:
-        dense = await session.execute(base.add_columns((1 - KnowledgeItem.embedding.cosine_distance(vector)).label("score"))
-                                      .where(KnowledgeItem.embedding.isnot(None))
-                                      .order_by(KnowledgeItem.embedding.cosine_distance(vector), KnowledgeItem.id).limit(top_k * 3))
-        for rank, row in enumerate(dense.all(), 1):
-            results[row[0].id] = SearchResult(row[0], dense_weight / (60 + rank), dense_score=float(row[1]))
+    async def dense_route() -> list[tuple[KnowledgeItem, float]]:
+        vector = (await encode_texts(query)).tolist()
+        async with async_session() as session:
+            dense = await session.execute(base.add_columns((1 - KnowledgeItem.embedding.cosine_distance(vector)).label("score"))
+                                          .where(KnowledgeItem.embedding.isnot(None))
+                                          .order_by(KnowledgeItem.embedding.cosine_distance(vector), KnowledgeItem.id).limit(top_k * 3))
+            return [(row[0], float(row[1])) for row in dense.all()]
+
+    async def sparse_route() -> list[KnowledgeItem]:
         keywords = _extract_keywords(query)
-        if keywords:
-            matches = [or_(KnowledgeItem.title.ilike(f"%{word}%"), KnowledgeItem.content.ilike(f"%{word}%")) for word in keywords]
-            score = sum((case((match, 1), else_=0) for match in matches), start=literal(0))
+        if not keywords:
+            return []
+        matches = [or_(KnowledgeItem.title.ilike(f"%{word}%"), KnowledgeItem.content.ilike(f"%{word}%")) for word in keywords]
+        score = sum((case((match, 1), else_=0) for match in matches), start=literal(0))
+        async with async_session() as session:
             sparse = await session.execute(base.where(or_(*matches)).order_by(score.desc(), KnowledgeItem.id).limit(top_k * 3))
-            for rank, item in enumerate(sparse.scalars().all(), 1):
-                results.setdefault(item.id, SearchResult(item, 0.0)).score += (1 - dense_weight) / (60 + rank)
-                results[item.id].sparse_score = 1 / rank
+            return list(sparse.scalars().all())
+
+    dense_rows, sparse_rows = await asyncio.gather(dense_route(), sparse_route(), return_exceptions=True)
+    if isinstance(dense_rows, asyncio.CancelledError) or isinstance(sparse_rows, asyncio.CancelledError):
+        raise asyncio.CancelledError
+    failed = isinstance(dense_rows, BaseException) or isinstance(sparse_rows, BaseException)
+    if isinstance(dense_rows, BaseException):
+        logger.warning("Dense retrieval unavailable; checking keyword results")
+        dense_rows = []
+    if isinstance(sparse_rows, BaseException):
+        logger.warning("Keyword retrieval unavailable; checking dense results")
+        sparse_rows = []
+    if failed and not dense_rows and not sparse_rows:
+        raise RuntimeError("Search unavailable without verified candidates")
+
+    results: dict[str, SearchResult] = {}
+    for rank, (item, similarity) in enumerate(dense_rows, 1):
+        results[item.id] = SearchResult(item, dense_weight / (60 + rank), dense_score=similarity)
+    for rank, item in enumerate(sparse_rows, 1):
+        results.setdefault(item.id, SearchResult(item, 0.0)).score += (1 - dense_weight) / (60 + rank)
+        results[item.id].sparse_score = 1 / rank
     return sorted(results.values(), key=lambda result: (-result.score, result.item.id))[:top_k]
