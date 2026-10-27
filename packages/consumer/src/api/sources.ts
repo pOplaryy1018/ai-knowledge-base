@@ -1,4 +1,4 @@
-import type { Source, SourceRevision, SourceTask, SourceDocument, SourceGraphStatus } from '@akb/shared'
+import type { Source, SourceRevision, SourceTask, SourceDocument, SourceGraphStatus, SourcePublication } from '@akb/shared'
 import { getApiClient } from './client'
 export async function listSources(signal?: AbortSignal) {
   return (await getApiClient().get<{ items: Source[] }>('/sources', { signal })).data.items
@@ -35,6 +35,14 @@ export async function listRevisions(id: string, signal?: AbortSignal) {
   return (
     await getApiClient().get<{ items: SourceRevision[] }>(`/sources/${id}/revisions`, { signal })
   ).data.items
+}
+export async function listPublications(id: string, signal?: AbortSignal) {
+  return (await getApiClient().get<{ items: SourcePublication[] }>(`/sources/${id}/publications`, { signal })).data.items
+}
+export async function rollbackSource(id: string, targetRevisionId: string, expectedPublicationId: string, signal?: AbortSignal) {
+  return (await getApiClient().post<Source>(`/sources/${id}/rollback`, {
+    target_revision_id: targetRevisionId, expected_publication_id: expectedPublicationId,
+  }, { signal })).data
 }
 export async function archiveSource(id: string, signal?: AbortSignal) {
   return (await getApiClient().post<Source>(`/sources/${id}/archive`, {}, { signal })).data

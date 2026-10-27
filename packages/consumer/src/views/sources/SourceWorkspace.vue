@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import SourceImagePanel from '@/components/SourceImagePanel.vue'
+import SourceHistoryPanel from '@/components/SourceHistoryPanel.vue'
 import type { SourceGraphStatus, SourceTask } from '@akb/shared'
-import type { Source, SourceRevision, SourceDocument } from '@akb/shared'
+import type { Source, SourceRevision, SourceDocument, SourcePublication } from '@akb/shared'
 import { getApiClient } from '@/api/client'
 import {
   listSources,
@@ -12,6 +13,8 @@ import {
   getSourceGraph,
   retrySourceGraph,
   listRevisions,
+  listPublications,
+  rollbackSource,
   archiveSource,
   downloadOriginal,
   listRepoRoots,
@@ -24,7 +27,8 @@ import { createRequestScope } from '@/utils/request-scope'
 import { errorMessage, versionLabel, repositoryManifest } from '@/utils/review-state'
 const controller = new AbortController()
 const sources = ref<Source[]>([]),
-  revisions = ref<SourceRevision[]>([])
+  revisions = ref<SourceRevision[]>([]),
+  publications = ref<SourcePublication[]>([])
 const revisionRows = computed(() =>
   revisions.value.map((revision) => ({
     ...revision,
@@ -64,8 +68,11 @@ const name = ref(''),
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 const signal = controller.signal
 const selectionScope = createRequestScope()
+const rollbackScope = createRequestScope()
 const graphScope = createRequestScope()
 const graphStatus = ref<SourceGraphStatus>()
+const historyLoading = ref(false)
+const historyError = ref('')
 let graphTimer: ReturnType<typeof setTimeout> | undefined
 function graphLabel(state: SourceGraphStatus['status']) {
   return ({ not_ready: '等待资料发布', not_indexed: '当前版本尚无关系索引', pending: '等待构建',
@@ -127,28 +134,50 @@ async function act(action: () => Promise<void>) {
 }
 async function select(source: Source) {
   const request = selectionScope.begin(source.id)
+  rollbackScope.begin(source.id)
   scopeEditRequest.begin(source.id)
   scopePaths.value = (source.config?.include_paths || []).join(', ')
   selected.value = source
   graphStatus.value = undefined
   void loadGraph(source.id)
   revisions.value = []
+  publications.value = []
+  historyLoading.value = true
+  historyError.value = ''
   status.value = ''
   documentScope.begin(source.id)
   documents.value = []
   viewedContent.value = ''
   viewedRevision.value = ''
-  try {
-    const items = await listRevisions(source.id, request.signal)
-    if (selected.value?.id === request.id)
-      request.apply(() => {
-        revisions.value = items
-      })
-  } catch (e) {
-    request.apply(() => {
-      error.value = errorMessage(e)
-    })
-  }
+  await Promise.all([
+    listRevisions(source.id, request.signal).then(items => {
+      request.apply(() => { revisions.value = items })
+    }).catch(e => {
+      request.apply(() => { error.value = errorMessage(e) })
+    }),
+    listPublications(source.id, request.signal).then(history => {
+      request.apply(() => { publications.value = history })
+    }).catch(e => {
+      request.apply(() => { historyError.value = errorMessage(e) })
+    }).finally(() => {
+      request.apply(() => { historyLoading.value = false })
+    }),
+  ])
+}
+async function rollbackRevision(revisionId: string) {
+  const source = selected.value
+  if (!source?.current_publication_id) return
+  const request = rollbackScope.begin(source.id)
+  await act(async () => {
+    try {
+      await rollbackSource(source.id, revisionId, source.current_publication_id!, request.signal)
+      if (!request.isCurrent() || selected.value?.id !== source.id) return
+      await refresh()
+      if (selected.value?.id === source.id) status.value = '已重新发布历史版本，受影响答案将进入复核。'
+    } catch (e) {
+      if (request.isCurrent()) throw e
+    }
+  })
 }
 async function refresh() {
   await load()
@@ -333,6 +362,7 @@ onMounted(() => {
 onUnmounted(() => {
   controller.abort()
   selectionScope.dispose()
+  rollbackScope.dispose()
   documentScope.dispose()
   scopeEditRequest.dispose()
   graphScope.dispose()
@@ -551,6 +581,15 @@ onUnmounted(() => {
           :busy="busy"
           @task="imageTask"
           @refresh="act(refresh)"
+        />
+        <SourceHistoryPanel
+          :source="selected"
+          :publications="publications"
+          :busy="busy"
+          :loading="historyLoading"
+          :error="historyError"
+          @rollback="rollbackRevision"
+          @reload="act(() => select(selected!))"
         />
         <a-list v-if="selected.kind !== 'image'">
           <a-list-item

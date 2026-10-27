@@ -5,6 +5,37 @@ import pytest
 from tests.integration.test_evidence_lifecycle import lifecycle_client as lifecycle_client
 
 
+async def test_repository_snapshot_can_be_republished(lifecycle_client, db_session):
+    import uuid
+
+    from app.models.source import Source, SourceDocument, SourceRevision
+    from app.services.source_publication import publish_revision
+
+    client, user, kb = lifecycle_client
+    source = Source(user_id=user.id, knowledge_base_id=kb.id, name="repo", kind="git_local", config={})
+    db_session.add(source)
+    await db_session.flush()
+    revisions = []
+    for value in ("a", "b"):
+        revision = SourceRevision(source_id=source.id, raw_hash=uuid.uuid4().hex,
+                                  pipeline_version=value, state="ready", commit=value * 40)
+        db_session.add(revision)
+        await db_session.flush()
+        db_session.add(SourceDocument(revision_id=revision.id, logical_path="policy.py",
+                                      text=f"version = '{value}'", locator={}, content_hash=uuid.uuid4().hex))
+        await db_session.flush()
+        await publish_revision(db_session, source.id, revision.id, source.current_revision_id)
+        revisions.append(revision)
+    await db_session.commit()
+    history = (await client.get(f"/api/sources/{source.id}/publications")).json()["items"]
+    response = await client.post(f"/api/sources/{source.id}/rollback", json={
+        "target_revision_id": revisions[0].id, "expected_publication_id": history[0]["id"]})
+    assert response.status_code == 200, response.text
+    assert response.json()["current_revision_id"] == revisions[0].id
+    original = await client.get(f"/api/sources/{source.id}/revisions/{revisions[0].id}/documents")
+    assert original.status_code == 200 and original.json()["items"][0]["logical_path"] == "policy.py"
+
+
 @pytest.mark.parametrize("object_format", ["sha1", "sha256"])
 async def test_local_repository_manual_sync_and_original(lifecycle_client, monkeypatch, tmp_path, object_format):
     from app.core.config import settings

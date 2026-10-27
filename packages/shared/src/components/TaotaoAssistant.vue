@@ -382,7 +382,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.taotao-root { position: fixed; right: 22px; bottom: 20px; z-index: 1200; font-family: Inter, "Noto Sans SC", sans-serif; }
+.taotao-root { position: fixed; right: 22px; bottom: 20px; z-index: 900; font-family: Inter, "Noto Sans SC", sans-serif; }
 .taotao-trigger { display: flex; flex-direction: column; align-items: center; width: 118px; min-height: 139px; padding: 0; border: 0; background: transparent; filter: drop-shadow(0 12px 14px #000a); }
 .taotao-sprite { display: block; flex: none; width: 112px; height: 121px; background: url('/local-theme/taotao-q.png') 0 0 / 800% 1100% no-repeat; }
 .taotao-sprite.small { width: 50px; height: 54px; }

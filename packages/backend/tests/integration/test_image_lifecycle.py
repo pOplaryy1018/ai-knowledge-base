@@ -74,6 +74,26 @@ async def head(client, source_id):
     )["current_revision_id"]
 
 
+async def test_image_history_can_republish_original_version(lifecycle_client, monkeypatch):
+    from app.services.connectors import image
+
+    client, _, kb = lifecycle_client
+    monkeypatch.setattr(image, "_default_ocr", lambda _: "")
+    source_id = await create_image(client, kb)
+    first = await upload(client, source_id, png("white"))
+    assert (await run_task(first))["status"] == "completed"
+    first_id = await head(client, source_id)
+    second = await upload(client, source_id, png("black"), expected_revision_id=first_id)
+    assert (await run_task(second))["status"] == "completed"
+    history = (await client.get(f"/api/sources/{source_id}/publications")).json()["items"]
+    rollback = await client.post(f"/api/sources/{source_id}/rollback", json={
+        "target_revision_id": first_id, "expected_publication_id": history[0]["id"]})
+    assert rollback.status_code == 200, rollback.text
+    original = await client.get(f"/api/sources/{source_id}/revisions/{first_id}/original")
+    assert original.content == png("white")
+    assert await head(client, source_id) == first_id
+
+
 async def test_image_edits_replace_dedup_and_failure(lifecycle_client, monkeypatch, db_session):
     from unittest.mock import AsyncMock
 

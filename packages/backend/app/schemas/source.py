@@ -13,3 +13,8 @@ class SourceCreate(BaseModel):
 
 class SourceScopeUpdate(BaseModel):
     include_paths: list[str] = Field(default_factory=list, max_length=100)
+
+
+class SourceRollback(BaseModel):
+    target_revision_id: UUID
+    expected_publication_id: UUID

@@ -14,9 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import async_session as async_session
 from app.core.security import get_current_user
 from app.models.knowledge import KnowledgeBase
-from app.models.source import Source, SourceRevision, SourceSyncTask
+from app.models.source import Source, SourceDocument, SourceRevision, SourceSyncTask
+from app.models.source_publication import SourcePublication
 from app.models.user import User
-from app.schemas.source import SourceCreate, SourceScopeUpdate
+from app.schemas.source import SourceCreate, SourceRollback, SourceScopeUpdate
 from app.services.file_storage import UPLOAD_ROOT, remove_uploads
 from app.services.repo_access import authorized_roots, source_config
 
@@ -38,6 +39,7 @@ async def owned_source(session: AsyncSession, source_id: str, user_id: str, *, l
 def source_payload(source: Source) -> dict[str, Any]:
     return {"id": source.id, "knowledge_base_id": source.knowledge_base_id, "name": source.name,
             "kind": source.kind, "current_revision_id": source.current_revision_id,
+            "current_publication_id": source.current_publication_id,
             "active_task_id": source.active_task_id, "archived_at": source.archived_at,
             "config": source.config, "last_sync_manifest": source.last_sync_manifest}
 
@@ -214,6 +216,51 @@ async def revisions(source_id: uuid.UUID, user: User = Depends(get_current_user)
         return {"items": [{"id": r.id, "raw_hash": r.raw_hash, "state": r.state, "filename": r.filename,
                            "commit": r.commit, "manifest": r.manifest,
                            "created_at": r.created_at, "published_at": r.published_at} for r in rows]}
+
+
+@router.get("/sources/{source_id}/publications")
+async def publications(source_id: uuid.UUID, user: User = Depends(get_current_user)) -> dict[str, Any]:
+    async with async_session() as session:
+        source = await owned_source(session, str(source_id), user.id)
+        rows = (await session.execute(select(SourcePublication).where(SourcePublication.source_id == source.id)
+                                      .order_by(SourcePublication.sequence.desc()))).scalars().all()
+        return {"items": [{"id": row.id, "revision_id": row.revision_id,
+                           "sequence": row.sequence, "created_at": row.created_at} for row in rows]}
+
+
+@router.post("/sources/{source_id}/rollback")
+async def rollback_source(source_id: uuid.UUID, body: SourceRollback,
+                          user: User = Depends(get_current_user)) -> dict[str, Any]:
+    from app.services.source_publication import publish_revision
+
+    async with async_session() as session:
+        source = await owned_source(session, str(source_id), user.id, lock=True)
+        if source.archived_at or source.active_task_id:
+            raise HTTPException(409, "来源已归档或存在进行中的任务")
+        if source.current_publication_id != str(body.expected_publication_id):
+            raise HTTPException(409, "当前发布记录已变化，请刷新后重试")
+        head = await session.get(SourcePublication, source.current_publication_id)
+        if head is None or head.source_id != source.id or head.revision_id != source.current_revision_id:
+            raise HTTPException(409, "当前发布记录与来源不一致")
+        target_id = str(body.target_revision_id)
+        revision = await session.get(SourceRevision, target_id)
+        published = (await session.execute(select(SourcePublication.id).where(
+            SourcePublication.source_id == source.id, SourcePublication.revision_id == target_id).limit(1))).scalar_one_or_none()
+        if revision is None or revision.source_id != source.id or published is None:
+            raise HTTPException(404, "历史版本不可用")
+        if revision.state != "ready" or source.current_revision_id == target_id:
+            raise HTTPException(409, "版本未就绪或已经是当前版本")
+        if source.kind in {"git_local", "git_public"}:
+            available = (await session.execute(select(SourceDocument.id).where(
+                SourceDocument.revision_id == target_id).limit(1))).scalar_one_or_none() is not None
+        else:
+            path = Path(revision.file_path).resolve() if revision.file_path else None
+            available = bool(path and path.is_relative_to((SOURCE_ROOT / source.id).resolve()) and path.is_file())
+        if not available:
+            raise HTTPException(409, "历史版本原件不可用，无法回滚")
+        await publish_revision(session, source.id, target_id, source.current_revision_id)
+        await session.commit()
+        return source_payload(source)
 
 
 @router.get("/sources/{source_id}/revisions/{revision_id}/documents")

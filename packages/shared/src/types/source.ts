@@ -6,8 +6,15 @@ export interface Source {
   kind: 'document' | 'image' | 'git_local' | 'git_public'
   config?: { root_id?: string; relative_path?: string; url?: string; include_paths?: string[] }
   current_revision_id: string | null
+  current_publication_id?: string | null
   active_task_id: string | null
   archived_at: string | null
+}
+export interface SourcePublication {
+  id: string
+  revision_id: string
+  sequence: number
+  created_at: string
 }
 export interface SourceRevision {
   id: string
