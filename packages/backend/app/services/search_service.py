@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 import jieba
 from sqlalchemy import case, literal, or_, select
@@ -62,7 +63,8 @@ async def hybrid_search(knowledge_ids: list[str], query: str, top_k: int = 5, de
     return sorted(results.values(), key=lambda result: (-result.score, result.item.id))[:top_k]
 
 
-async def hybrid_search_versions(versions: dict[str, str], query: str, top_k: int = 5, dense_weight: float = 0.5, *, user_id: str) -> list[SearchResult]:
+async def hybrid_search_versions(versions: dict[str, str], query: str, top_k: int = 5, dense_weight: float = 0.5, *, user_id: str,
+                                 embedding_task: asyncio.Task[Any] | None = None) -> list[SearchResult]:
     """Retrieve only authorized immutable source/document version pairs."""
     from sqlalchemy import and_
 
@@ -79,7 +81,8 @@ async def hybrid_search_versions(versions: dict[str, str], query: str, top_k: in
                    SourceRevision.state == "ready", KnowledgeItem.status == "available",
                    or_(*(and_(Source.id == source, SourceRevision.id == revision) for source, revision in versions.items()))))
     async def dense_route() -> list[tuple[KnowledgeItem, float]]:
-        vector = (await encode_texts(query)).tolist()
+        embedding = await asyncio.shield(embedding_task) if embedding_task else await encode_texts(query)
+        vector = embedding.tolist()
         async with async_session() as session:
             dense = await session.execute(base.add_columns((1 - KnowledgeItem.embedding.cosine_distance(vector)).label("score"))
                                           .where(KnowledgeItem.embedding.isnot(None))

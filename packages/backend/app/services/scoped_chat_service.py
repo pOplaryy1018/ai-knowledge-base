@@ -42,8 +42,10 @@ def cited_evidence(answer: str, evidence: list[dict[str, Any]]) -> list[dict[str
     return [entry for entry in evidence if entry["index"] in indices]
 
 
-async def prepare_evidence(question: str, versions: dict[str, str], user_id: str) -> list[dict[str, Any]]:
-    results = await retrieve_version_evidence(versions, question, user_id=user_id)
+async def prepare_evidence(question: str, versions: dict[str, str], user_id: str,
+                           *, embedding_task: asyncio.Task[Any] | None = None) -> list[dict[str, Any]]:
+    results = (await retrieve_version_evidence(versions, question, user_id=user_id, embedding_task=embedding_task)
+               if embedding_task else await retrieve_version_evidence(versions, question, user_id=user_id))
     evidence: list[dict[str, Any]] = []
     document_ids = {result.item.document_id for result in results if result.item.document_id}
     if not document_ids:

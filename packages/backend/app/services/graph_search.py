@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import and_, or_, select
@@ -65,11 +66,14 @@ async def _graph_results(versions: dict[str, str], question: str, user_id: str,
 
 
 async def retrieve_version_evidence(versions: dict[str, str], question: str,
-                                    user_id: str, top_k: int = 5) -> list[SearchResult]:
+                                    user_id: str, top_k: int = 5,
+                                    embedding_task: asyncio.Task[Any] | None = None) -> list[SearchResult]:
     if not versions:
         return []
-    vector_route = asyncio.wait_for(
-        hybrid_search_versions(versions, question, top_k=top_k * 3, user_id=user_id), timeout=30)
+    vector_search = (hybrid_search_versions(versions, question, top_k=top_k * 3, user_id=user_id,
+                                            embedding_task=embedding_task)
+                     if embedding_task else hybrid_search_versions(versions, question, top_k=top_k * 3, user_id=user_id))
+    vector_route = asyncio.wait_for(vector_search, timeout=30)
     graph_route = asyncio.wait_for(_graph_results(versions, question, user_id, top_k * 3), timeout=5)
     vector, graph = await asyncio.gather(vector_route, graph_route, return_exceptions=True)
     if isinstance(vector, BaseException) and isinstance(graph, BaseException):

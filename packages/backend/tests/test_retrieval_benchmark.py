@@ -1,5 +1,8 @@
+from types import SimpleNamespace
+
 import pytest
 
+from tools import retrieval_benchmark
 from tools.retrieval_benchmark import run_benchmark, summarize_retrieval, validate_test_database
 
 
@@ -35,3 +38,13 @@ async def test_benchmark_entrypoint_checks_test_database_before_loading_assets(m
     monkeypatch.setenv("TEST_DATABASE_URL", "postgresql+asyncpg://test:test@remote:25432/akb_evidence_test")
     with pytest.raises(ValueError, match="isolated test URL|local akb_evidence_test"):
         await run_benchmark(tmp_path / "missing.jsonl", tmp_path / "model", 1)
+
+
+def test_comparison_measurement_selects_only_text_conflict_cases():
+    assert hasattr(retrieval_benchmark, "select_cases")
+    cases = [SimpleNamespace(category="document", scenario="conflict"),
+             SimpleNamespace(category="code", scenario="positive"),
+             SimpleNamespace(category="mixed", scenario="conflict"),
+             SimpleNamespace(category="code", scenario="conflict")]
+    selected = retrieval_benchmark.select_cases(cases, 10, comparison=True)
+    assert selected == [cases[0], cases[3]]

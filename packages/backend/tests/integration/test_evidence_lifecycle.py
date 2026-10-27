@@ -14,7 +14,7 @@ from app.main import app
 @pytest.fixture
 async def lifecycle_client(db_session, owner_kb, monkeypatch, tmp_path):
     from app.api import answer_api, source_api
-    from app.services import impact_service, scoped_chat_service, search_service, source_jobs
+    from app.services import comparison_service, impact_service, scoped_chat_service, search_service, source_jobs
 
     user, kb = owner_kb
 
@@ -37,6 +37,7 @@ async def lifecycle_client(db_session, owner_kb, monkeypatch, tmp_path):
 
     monkeypatch.setattr(source_jobs, "encode_texts", embedding)
     monkeypatch.setattr(search_service, "encode_texts", embedding)
+    monkeypatch.setattr(comparison_service, "encode_texts", embedding)
     monkeypatch.setattr(scoped_chat_service, "stream_generate", provider)
     app.dependency_overrides[get_current_user] = lambda: user
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

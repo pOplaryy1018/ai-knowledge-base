@@ -46,6 +46,7 @@ async def comparison_scope(db_session, owner_kb, monkeypatch):
     async def encode(*args):
         return np.ones(1024)
     monkeypatch.setattr(search_service, "encode_texts", encode)
+    monkeypatch.setattr(comparison_service, "encode_texts", encode)
     async def generate(system, history, **kwargs):
         assignments = json.loads(system.split("编号到来源ID：")[-1])
         yield json.dumps({"rows": [{"dimension": "事务", "cells": [

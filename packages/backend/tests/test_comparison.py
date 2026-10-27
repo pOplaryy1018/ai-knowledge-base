@@ -78,9 +78,102 @@ async def test_retrieves_each_source_and_reindexes(monkeypatch):
     from app.services import comparison_service as service
     retrieve = AsyncMock(side_effect=[[evidence()[0]], [], [evidence()[1]]])
     monkeypatch.setattr(service, "prepare_evidence", retrieve)
+    monkeypatch.setattr(service, "encode_texts", AsyncMock(return_value=[0.0]), raising=False)
     result = await prepare_comparison_evidence("事务", {"a": "va", "c": "vc", "b": "vb"}, "owner")
     assert [entry["index"] for entry in result] == [1, 2]
     assert [call.args[1] for call in retrieve.call_args_list] == [{"a": "va"}, {"c": "vc"}, {"b": "vb"}]
+
+
+async def test_comparison_shares_one_embedding_and_runs_sources_concurrently(monkeypatch):
+    import asyncio
+
+    from app.services import comparison_service as service
+
+    started = []
+    both_started = asyncio.Event()
+    calls = 0
+
+    async def encode(_question):
+        nonlocal calls
+        calls += 1
+        await asyncio.wait_for(both_started.wait(), timeout=2)
+        return [0.0]
+
+    async def retrieve(_question, versions, _user, *, embedding_task=None):
+        assert embedding_task is not None
+        started.append(next(iter(versions)))
+        if len(started) == 2:
+            both_started.set()
+        await embedding_task
+        return [{"source_id": next(iter(versions)), "index": 99}]
+
+    monkeypatch.setattr(service, "encode_texts", encode, raising=False)
+    monkeypatch.setattr(service, "prepare_evidence", retrieve)
+    result = await asyncio.wait_for(prepare_comparison_evidence("问题", {"a": "va", "b": "vb"}, "owner"), timeout=3)
+    assert calls == 1
+    assert [(entry["source_id"], entry["index"]) for entry in result] == [("a", 1), ("b", 2)]
+
+
+async def test_comparison_cancellation_drains_shared_embedding_and_sources(monkeypatch):
+    import asyncio
+
+    from app.services import comparison_service as service
+
+    both_started = asyncio.Event()
+    embedding_done = asyncio.Event()
+    source_done = []
+    started = []
+
+    async def encode(_question):
+        try:
+            await asyncio.Event().wait()
+        finally:
+            embedding_done.set()
+
+    async def retrieve(_question, versions, _user, *, embedding_task=None):
+        source_id = next(iter(versions))
+        started.append(source_id)
+        if len(started) == 2:
+            both_started.set()
+        try:
+            await asyncio.shield(embedding_task)
+        finally:
+            source_done.append(source_id)
+        return []
+
+    monkeypatch.setattr(service, "encode_texts", encode)
+    monkeypatch.setattr(service, "prepare_evidence", retrieve)
+    task = asyncio.create_task(prepare_comparison_evidence("问题", {"a": "va", "b": "vb"}, "owner"))
+    await asyncio.wait_for(both_started.wait(), timeout=2)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert embedding_done.is_set() and set(source_done) == {"a", "b"}
+
+
+async def test_comparison_bounds_concurrent_source_retrieval(monkeypatch):
+    import asyncio
+
+    from app.services import comparison_service as service
+
+    active = 0
+    maximum = 0
+
+    async def retrieve(_question, versions, _user, *, embedding_task=None):
+        nonlocal active, maximum
+        active += 1
+        maximum = max(maximum, active)
+        try:
+            await asyncio.sleep(0.01)
+            return [{"source_id": next(iter(versions)), "index": 99}]
+        finally:
+            active -= 1
+
+    monkeypatch.setattr(service, "encode_texts", AsyncMock(return_value=[0.0]))
+    monkeypatch.setattr(service, "prepare_evidence", retrieve)
+    result = await prepare_comparison_evidence("问题", {"a": "va", "b": "vb", "c": "vc", "d": "vd"}, "owner")
+    assert maximum == 2
+    assert [entry["source_id"] for entry in result] == ["a", "b", "c", "d"]
 
 
 async def test_generation_without_evidence_skips_provider(monkeypatch):

@@ -1,4 +1,5 @@
 """Per-source retrieval and validated native comparison presentation."""
+import asyncio
 import json
 import re
 from contextlib import aclosing
@@ -15,6 +16,7 @@ from app.services.scoped_chat_service import (
     generate_scoped_answer,
     prepare_evidence,
 )
+from app.services.vectorizer import encode_texts
 
 MISSING = "未找到依据"
 MAX_OUTPUT = 40000
@@ -34,8 +36,25 @@ async def source_names(versions: dict[str, str], user_id: str) -> dict[str, str]
 
 async def prepare_comparison_evidence(question: str, versions: dict[str, str], user_id: str) -> list[dict[str, Any]]:
     evidence: list[dict[str, Any]] = []
-    for source_id, revision_id in versions.items():
-        entries = await prepare_evidence(question, {source_id: revision_id}, user_id)
+    if not versions:
+        return evidence
+    embedding_task = asyncio.create_task(encode_texts(question))
+    source_limit = asyncio.Semaphore(2)
+
+    async def retrieve_one(source_id: str, revision_id: str) -> list[dict[str, Any]]:
+        async with source_limit:
+            return await prepare_evidence(question, {source_id: revision_id}, user_id, embedding_task=embedding_task)
+
+    try:
+        results = await asyncio.gather(*(retrieve_one(source_id, revision_id)
+                                         for source_id, revision_id in versions.items()), return_exceptions=True)
+    finally:
+        if not embedding_task.done():
+            embedding_task.cancel()
+        await asyncio.gather(embedding_task, return_exceptions=True)
+    for entries in results:
+        if isinstance(entries, BaseException):
+            raise entries
         for entry in entries[:3]:
             evidence.append({**entry, "index": len(evidence) + 1})
     return evidence

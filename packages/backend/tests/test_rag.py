@@ -111,6 +111,28 @@ async def test_scoped_successful_empty_routes_return_no_results(monkeypatch):
     assert await service.hybrid_search_versions({"source": "revision"}, "ERROR42", user_id="alice") == []
 
 
+async def test_shared_embedding_failure_preserves_each_keyword_path(monkeypatch):
+    from app.services import search_service as service
+
+    item = SimpleNamespace(id="keyword", title="ERROR42", content="合成资料")
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = [item]
+    session = AsyncMock()
+    session.execute.return_value = result
+    context = MagicMock()
+    context.__aenter__ = AsyncMock(return_value=session)
+    context.__aexit__ = AsyncMock(return_value=None)
+    monkeypatch.setattr(service, "async_session", lambda: context)
+    encoder = AsyncMock(side_effect=RuntimeError("unavailable"))
+    shared = asyncio.create_task(encoder("ERROR42"))
+    rows = await asyncio.gather(*(
+        service.hybrid_search_versions({source: revision}, "ERROR42", user_id="alice", embedding_task=shared)
+        for source, revision in [("a", "va"), ("b", "vb")]
+    ))
+    assert encoder.await_count == 1
+    assert [[hit.item.id for hit in group] for group in rows] == [["keyword"], ["keyword"]]
+
+
 async def test_conversation_reuse_requires_matching_agent(monkeypatch):
     from app.services import chat_service as service
 

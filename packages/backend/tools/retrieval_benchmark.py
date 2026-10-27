@@ -78,11 +78,19 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-async def run_benchmark(dataset_path: Path, model_path: Path, limit: int) -> dict[str, Any]:
+def select_cases(cases: Any, limit: int, *, comparison: bool = False) -> list[Any]:
+    return [case for case in cases if case.category in {"document", "code"}
+            and (not comparison or case.scenario == "conflict")][:limit]
+
+
+async def run_benchmark(dataset_path: Path, model_path: Path, limit: int, *,
+                        comparison: bool = False, repeats: int = 1) -> dict[str, Any]:
     test_url = os.environ.get("TEST_DATABASE_URL", "")
     validate_test_database(test_url)
     if os.environ.get("DATABASE_URL") != test_url:
         raise ValueError("DATABASE_URL must match the isolated test URL")
+    if not 1 <= repeats <= 5:
+        raise ValueError("Repeats must be between 1 and 5")
     from sentence_transformers import SentenceTransformer
     from sqlalchemy import delete
 
@@ -91,6 +99,7 @@ async def run_benchmark(dataset_path: Path, model_path: Path, limit: int) -> dic
     from app.models.source import Source, SourceDocument, SourceRevision
     from app.models.user import User
     from app.services import vectorizer
+    from app.services.comparison_service import prepare_comparison_evidence
     from app.services.quality_evaluation import load_dataset
     from app.services.search_service import hybrid_search_versions
     from app.services.source_extraction import LocatedText
@@ -98,7 +107,7 @@ async def run_benchmark(dataset_path: Path, model_path: Path, limit: int) -> dic
 
     validate_test_database(engine.url.render_as_string(hide_password=False))
     dataset = load_dataset(dataset_path, split="dev")
-    cases = [case for case in dataset.cases if case.category in {"document", "code"}][:limit]
+    cases = select_cases(dataset.cases, limit, comparison=comparison)
     if not cases:
         raise ValueError("No eligible development cases")
     if not (model_path / "model.safetensors").is_file():
@@ -166,23 +175,27 @@ async def run_benchmark(dataset_path: Path, model_path: Path, limit: int) -> dic
             expected = [{"source_id": gold.source_id,
                          "version": next(source.version for source in case.sources if source.id == gold.source_id),
                          "quote": gold.quote} for gold in case.expected_evidence]
-            started = time.perf_counter()
-            try:
-                results = await hybrid_search_versions(selected, case.question, top_k=5, user_id=user_id)
-                elapsed_ms = (time.perf_counter() - started) * 1000
-                hits = []
-                for result in results:
-                    hit_revision = result.item.revision_id
-                    if hit_revision is None or hit_revision not in identity:
-                        raise ValueError("Retrieved item has an unexpected revision")
-                    hits.append({"source_id": identity[hit_revision][0],
-                                 "version": identity[hit_revision][1],
-                                 "content": result.item.content})
-                rows.append({"case_id": case.id, "status": "completed", "expected": expected,
-                             "hits": hits, "latency_ms": elapsed_ms})
-            except Exception:
-                rows.append({"case_id": case.id, "status": "error", "expected": expected,
-                             "hits": [], "latency_ms": None, "reason": "retrieval_failed"})
+            for repetition in range(repeats):
+                started = time.perf_counter()
+                try:
+                    if comparison:
+                        entries = await prepare_comparison_evidence(case.question, selected, user_id)
+                        retrieved = [(entry["revision_id"], entry["content"]) for entry in entries]
+                    else:
+                        results = await hybrid_search_versions(selected, case.question, top_k=5, user_id=user_id)
+                        retrieved = [(result.item.revision_id, result.item.content) for result in results]
+                    elapsed_ms = (time.perf_counter() - started) * 1000
+                    hits = []
+                    for hit_revision, content in retrieved:
+                        if hit_revision is None or hit_revision not in identity:
+                            raise ValueError("Retrieved item has an unexpected revision")
+                        hits.append({"source_id": identity[hit_revision][0],
+                                     "version": identity[hit_revision][1], "content": content})
+                    rows.append({"case_id": case.id, "repetition": repetition + 1, "status": "completed",
+                                 "expected": expected, "hits": hits, "latency_ms": elapsed_ms})
+                except Exception:
+                    rows.append({"case_id": case.id, "repetition": repetition + 1, "status": "error",
+                                 "expected": expected, "hits": [], "latency_ms": None, "reason": "retrieval_failed"})
     finally:
         async with async_session() as session:
             await session.execute(delete(KnowledgeItem).where(KnowledgeItem.revision_id.in_(revision_ids)))
@@ -197,14 +210,15 @@ async def run_benchmark(dataset_path: Path, model_path: Path, limit: int) -> dic
 
     config_digest = file_sha256(model_path / "config.json")
     return {"run_id": run_id, "dataset_hash": dataset.dataset_hash, "split": "dev",
-            "scope": "text-only scoped vector and keyword retrieval; no graph, OCR or generation",
+            "scope": ("text-only per-source comparison evidence; no graph projection, OCR or generation" if comparison
+                      else "text-only scoped vector and keyword retrieval; no graph, OCR or generation"),
             "model_path": str(model_path.resolve()), "model_config_sha256": config_digest,
             "model_weights_sha256": file_sha256(model_path / "model.safetensors"),
             "latency_scope": "retrieval call only; model loading and ingestion excluded; first request included",
             "runtime": {"python": platform.python_version(), "platform": platform.platform(),
                         "processor": platform.processor(), "logical_cpus": os.cpu_count(),
                         "device": str(model.device)},
-            "git": git_metadata(), "cases_selected": len(cases),
+            "git": git_metadata(), "cases_selected": len(cases), "repeats": repeats,
             "metrics": summarize_retrieval(rows), "rows": rows}
 
 
@@ -212,13 +226,16 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-dir", type=Path, default=Path("models/models/Qwen--Qwen3-Embedding-0.6B/snapshots/master"))
     parser.add_argument("--limit", type=int, default=10, choices=range(1, 21))
+    parser.add_argument("--comparison", action="store_true")
+    parser.add_argument("--repeat", type=int, default=1, choices=range(1, 6))
     args = parser.parse_args()
     url = os.environ.get("TEST_DATABASE_URL", "")
     validate_test_database(url)
     os.environ["DATABASE_URL"] = url
     os.environ["ENVIRONMENT"] = "test"
     os.environ["DEBUG"] = "false"
-    report = asyncio.run(run_benchmark(Path("evaluation/cases.jsonl"), args.model_dir, args.limit))
+    report = asyncio.run(run_benchmark(Path("evaluation/cases.jsonl"), args.model_dir, args.limit,
+                                       comparison=args.comparison, repeats=args.repeat))
     output_dir = Path("evaluation/reports")
     output_dir.mkdir(parents=True, exist_ok=True)
     output = output_dir / f"retrieval-{report['run_id']}.json"
