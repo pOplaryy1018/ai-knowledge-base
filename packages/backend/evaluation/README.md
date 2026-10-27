@@ -91,9 +91,11 @@ $env:TEST_DATABASE_URL='postgresql+asyncpg://evidence_test:evidence_test_only@12
 & .\.venv312\Scripts\python.exe tools/retrieval_benchmark.py --limit 20
 # 仅测多来源对比的开发集冲突场景，每例重复 3 次
 & .\.venv312\Scripts\python.exe tools/retrieval_benchmark.py --comparison --limit 20 --repeat 3
+# 冻结开发与参数后，显式运行文档和代码的封存集；不得据此继续调参
+& .\.venv312\Scripts\python.exe tools/retrieval_benchmark.py --split holdout --limit 20
 ```
 
 默认从本机缓存加载 Qwen3-Embedding-0.6B，不下载模型；也可用 `--model-dir` 指定已有本地模型目录。报告写入忽略的 `evaluation/reports`，记录数据集 hash、模型配置与权重 hash、实际运行设备、代码状态、每例候选和耗时。计时包含检索中的查询向量计算和数据库查询，排除模型加载及资料预先入库；首个查询未另行预热。
 
-该工具只测开发集中的文档和代码，不测图谱、OCR、生成、引用支撑或拒答。单例资料范围通常很小，不能代表真实业务准确率。`Recall@5` 与 `MRR` 只统计完成且有预期证据的例子，失败和无证据例分别计数；延迟仅统计完成例。开发集用于诊断，封存集不参与调参。
+该工具只测选定数据分组中的文档和代码，不测图谱、OCR、生成、引用支撑或拒答。单例资料范围通常很小，不能代表真实业务准确率。`Recall@5` 与 `MRR` 只统计完成且有预期证据的例子，失败和无证据例分别计数；延迟仅统计完成例。开发集用于诊断，封存集不参与调参。封存评估前应冻结代码与参数，后续修复需使用新的开发集和封存集。
 对比模式记录不同样例数和重复次数；重复观测不能当成独立样例。若用源码历史版本对照，须在报告中明确指出对照函数的实际提交，不能仅凭当前工作区提交号判断。

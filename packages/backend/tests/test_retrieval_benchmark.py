@@ -48,3 +48,19 @@ def test_comparison_measurement_selects_only_text_conflict_cases():
              SimpleNamespace(category="code", scenario="conflict")]
     selected = retrieval_benchmark.select_cases(cases, 10, comparison=True)
     assert selected == [cases[0], cases[3]]
+
+
+def test_holdout_selection_is_explicit_and_excludes_development_groups():
+    from pathlib import Path
+
+    from app.services.quality_evaluation import load_dataset
+
+    path = Path(__file__).parents[1] / "evaluation/cases.jsonl"
+    dev = load_dataset(path, split="dev")
+    sealed = load_dataset(path, split="holdout")
+    assert {case.group_id for case in dev.cases}.isdisjoint({case.group_id for case in sealed.cases})
+    assert len(retrieval_benchmark.select_cases(sealed.cases, 20)) == 10
+    assert retrieval_benchmark.validate_split("holdout") == "holdout"
+    assert retrieval_benchmark.validate_split("dev") == "dev"
+    with pytest.raises(ValueError):
+        retrieval_benchmark.validate_split("all")

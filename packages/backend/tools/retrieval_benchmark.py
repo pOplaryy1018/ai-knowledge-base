@@ -1,4 +1,4 @@
-"""Measure actual scoped text retrieval on synthetic data in the isolated test DB."""
+"""Measure scoped text retrieval on a selected synthetic split in the isolated test DB."""
 
 import argparse
 import asyncio
@@ -13,7 +13,7 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy.engine import make_url
 
@@ -83,8 +83,16 @@ def select_cases(cases: Any, limit: int, *, comparison: bool = False) -> list[An
             and (not comparison or case.scenario == "conflict")][:limit]
 
 
+def validate_split(split: str) -> Literal["dev", "holdout"]:
+    if split == "dev":
+        return "dev"
+    if split == "holdout":
+        return "holdout"
+    raise ValueError("Retrieval benchmark split must be dev or holdout")
+
+
 async def run_benchmark(dataset_path: Path, model_path: Path, limit: int, *,
-                        comparison: bool = False, repeats: int = 1) -> dict[str, Any]:
+                        comparison: bool = False, repeats: int = 1, split: str = "dev") -> dict[str, Any]:
     test_url = os.environ.get("TEST_DATABASE_URL", "")
     validate_test_database(test_url)
     if os.environ.get("DATABASE_URL") != test_url:
@@ -106,10 +114,10 @@ async def run_benchmark(dataset_path: Path, model_path: Path, limit: int, *,
     from app.services.source_publication import document_chunks
 
     validate_test_database(engine.url.render_as_string(hide_password=False))
-    dataset = load_dataset(dataset_path, split="dev")
+    dataset = load_dataset(dataset_path, split=validate_split(split))
     cases = select_cases(dataset.cases, limit, comparison=comparison)
     if not cases:
-        raise ValueError("No eligible development cases")
+        raise ValueError("No eligible cases for selected split")
     if not (model_path / "model.safetensors").is_file():
         raise ValueError("Local embedding model weights are unavailable")
 
@@ -209,7 +217,7 @@ async def run_benchmark(dataset_path: Path, model_path: Path, limit: int, *,
         vectorizer._model = None
 
     config_digest = file_sha256(model_path / "config.json")
-    return {"run_id": run_id, "dataset_hash": dataset.dataset_hash, "split": "dev",
+    return {"run_id": run_id, "dataset_hash": dataset.dataset_hash, "split": dataset.split,
             "scope": ("text-only per-source comparison evidence; no graph projection, OCR or generation" if comparison
                       else "text-only scoped vector and keyword retrieval; no graph, OCR or generation"),
             "model_path": str(model_path.resolve()), "model_config_sha256": config_digest,
@@ -228,6 +236,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=10, choices=range(1, 21))
     parser.add_argument("--comparison", action="store_true")
     parser.add_argument("--repeat", type=int, default=1, choices=range(1, 6))
+    parser.add_argument("--split", choices=("dev", "holdout"), default="dev")
     args = parser.parse_args()
     url = os.environ.get("TEST_DATABASE_URL", "")
     validate_test_database(url)
@@ -235,13 +244,13 @@ def main() -> None:
     os.environ["ENVIRONMENT"] = "test"
     os.environ["DEBUG"] = "false"
     report = asyncio.run(run_benchmark(Path("evaluation/cases.jsonl"), args.model_dir, args.limit,
-                                       comparison=args.comparison, repeats=args.repeat))
+                                       comparison=args.comparison, repeats=args.repeat, split=args.split))
     output_dir = Path("evaluation/reports")
     output_dir.mkdir(parents=True, exist_ok=True)
     output = output_dir / f"retrieval-{report['run_id']}.json"
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({"report": str(output), "dataset_hash": report["dataset_hash"],
-                      "scope": report["scope"], "metrics": report["metrics"]}, ensure_ascii=False, indent=2))
+                      "split": report["split"], "scope": report["scope"], "metrics": report["metrics"]}, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
