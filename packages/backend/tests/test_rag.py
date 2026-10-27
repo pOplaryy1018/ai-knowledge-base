@@ -5,6 +5,23 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 
+def test_identifier_tokens_and_like_wildcards_are_literal():
+    from app.services import search_service as service
+
+    assert "ERR_42" in service._extract_keywords("处理 ERR_42 和 v1.2.3")
+    assert "v1.2.3" in service._extract_keywords("处理 ERR_42 和 v1.2.3")
+    assert hasattr(service, "_escape_like")
+    assert service._escape_like(r"A_%\B") == r"A\_\%\\B"
+
+
+def test_many_identifiers_do_not_displace_all_chinese_terms():
+    from app.services import search_service as service
+
+    keywords = service._extract_keywords(" ".join(f"ERR_{i}" for i in range(12)) + " 退休政策")
+    assert any(word in keywords for word in ("退休", "政策", "退休政策"))
+    assert len(keywords) <= 10
+
+
 async def test_hybrid_always_recalls_keywords_and_filters_owner(monkeypatch):
     from app.services import search_service as service
 

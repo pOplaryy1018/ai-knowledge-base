@@ -41,3 +41,33 @@ async def test_keyword_fallback_respects_owner_and_selected_revision(db_session,
     import pytest
     with pytest.raises(RuntimeError, match="without verified candidates"):
         await search_service.hybrid_search_versions({source.id: revisions[1].id}, "ERROR42", user_id=str(uuid.uuid4()))
+
+
+async def test_literal_identifier_ranks_exact_fragment_ahead_of_similar_code(db_session, owner_kb, monkeypatch):
+    from app.services import search_service
+
+    user, kb = owner_kb
+    source = Source(user_id=user.id, knowledge_base_id=kb.id, name="Synthetic", kind="document")
+    db_session.add(source)
+    await db_session.flush()
+    revision = SourceRevision(source_id=source.id, raw_hash=uuid.uuid4().hex, pipeline_version="test", state="ready")
+    db_session.add(revision)
+    await db_session.flush()
+    document = SourceDocument(revision_id=revision.id, logical_path="errors.txt", text="ERRX42\nERR_42",
+                              locator={}, content_hash=uuid.uuid4().hex)
+    db_session.add(document)
+    await db_session.flush()
+    base = uuid.uuid4().int & ~3
+    distractor = KnowledgeItem(id=str(uuid.UUID(int=base + 1)), knowledge_base_id=kb.id, revision_id=revision.id,
+                               document_id=document.id, title="candidate", content="ERRX42",
+                               source="source_revision", source_metadata={}, status="available")
+    target = KnowledgeItem(id=str(uuid.UUID(int=base + 2)), knowledge_base_id=kb.id, revision_id=revision.id,
+                           document_id=document.id, title="candidate", content="ERR_42",
+                           source="source_revision", source_metadata={}, status="available")
+    db_session.add_all([distractor, target])
+    await db_session.flush()
+    monkeypatch.setattr(search_service, "async_session", async_sessionmaker(
+        bind=db_session.bind, class_=AsyncSession, expire_on_commit=False, join_transaction_mode="create_savepoint"))
+    monkeypatch.setattr(search_service, "encode_texts", AsyncMock(side_effect=RuntimeError("synthetic embedding failure")))
+    results = await search_service.hybrid_search_versions({source.id: revision.id}, "ERR_42", top_k=1, user_id=user.id)
+    assert [result.item.content for result in results] == ["ERR_42"]
