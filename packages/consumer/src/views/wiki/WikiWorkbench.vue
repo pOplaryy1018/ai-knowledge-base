@@ -91,7 +91,9 @@ onUnmounted(() => {
 <template>
   <section class="wiki-workbench">
     <div class="wiki-heading">
-      <div><h2>LLM Wiki</h2><p>把已发布资料编译为可编辑、可追溯的知识页面。</p></div>
+      <div class="akb-section-heading">
+        <span class="akb-kicker">INTELLIGENCE / WIKI</span><h2>LLM Wiki</h2><p>把已发布资料编译为可编辑、可追溯的知识页面。</p>
+      </div>
       <router-link to="/workspace/sources">
         管理资料来源
       </router-link>

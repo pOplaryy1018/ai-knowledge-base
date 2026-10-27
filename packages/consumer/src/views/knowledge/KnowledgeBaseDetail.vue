@@ -34,6 +34,9 @@ function goBack() { router.push('/workspace/knowledge-bases') }
 
 <template>
   <div class="detail-page">
+    <header class="akb-section-heading">
+      <span class="akb-kicker">ARCHIVE / LIBRARY DETAIL</span><h2>知识库文件</h2><p>查看导入内容与处理状态，继续添加资料。</p>
+    </header>
     <div class="detail-header">
       <a-button
         type="text"
@@ -79,7 +82,7 @@ function goBack() { router.push('/workspace/knowledge-bases') }
 </template>
 
 <style scoped>
-.detail-page { background: var(--color-bg-card); border-radius:8px; padding:20px; }
+.detail-page { background: var(--color-bg-card); border: 1px solid var(--akb-line); border-radius: var(--akb-card-radius); padding:24px; }
 .detail-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
 </style>
 
@@ -93,4 +96,5 @@ function goBack() { router.push('/workspace/knowledge-bases') }
   flex-direction: column;
   gap: 12px;
 }
+@media (max-width: 640px) { .import-toast-stack { right: 8px; left: 8px; bottom: 8px; } }
 </style>

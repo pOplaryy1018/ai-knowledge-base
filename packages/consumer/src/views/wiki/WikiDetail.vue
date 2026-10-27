@@ -154,6 +154,7 @@ onUnmounted(() => { reads.dispose(); writes.dispose() })
     <template v-if="page">
       <div class="wiki-heading">
         <div>
+          <span class="akb-kicker">INTELLIGENCE / WIKI PAGE</span>
           <h2>{{ page.title }}</h2><p class="wiki-note">
             [[{{ page.slug }}]] · {{ page.published_revision ? '已发布' : '尚未发布' }}
           </p>

@@ -40,6 +40,7 @@ pgdata/
 
 # ── 上传 / 临时文件 ──
 uploads/
+/packages/*/public/local-theme/
 /packages/backend/models/
 temp/
 tmp/

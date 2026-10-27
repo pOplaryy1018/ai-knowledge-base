@@ -50,8 +50,8 @@ const renderedHtml = computed(() => md.render(props.content))
 .markdown-preview {
   overflow-y: auto;
   padding: 12px 16px;
-  background: #fafafa;
-  border: 1px solid #ebeef5;
+  background: var(--akb-surface);
+  border: 1px solid var(--akb-line);
   border-radius: var(--akb-btn-radius);
 }
 
@@ -81,7 +81,7 @@ const renderedHtml = computed(() => md.render(props.content))
 }
 
 .markdown-body :deep(pre) {
-  background: #f0f2f5;
+  background: #130f19;
   border-radius: var(--akb-btn-radius);
   padding: 12px 16px;
   overflow-x: auto;
@@ -97,7 +97,7 @@ const renderedHtml = computed(() => md.render(props.content))
   border-left: 4px solid var(--akb-primary);
   padding: 8px 16px;
   margin: 8px 0;
-  background: #ecf5ff;
+  background: #2d2238;
   color: var(--akb-text-secondary);
 }
 
@@ -115,13 +115,13 @@ const renderedHtml = computed(() => md.render(props.content))
 
 .markdown-body :deep(th),
 .markdown-body :deep(td) {
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--akb-line);
   padding: 8px 12px;
   text-align: left;
 }
 
 .markdown-body :deep(th) {
-  background: #f5f7fa;
+  background: var(--akb-surface-raised);
   font-weight: 600;
 }
 </style>

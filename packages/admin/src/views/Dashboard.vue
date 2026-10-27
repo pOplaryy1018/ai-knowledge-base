@@ -15,7 +15,7 @@ const { data: activities, isLoading: activityLoading } = useRecentActivities(10)
 
 const quickLinks = computed(() => [
   { title: '知识库管理', icon: IconFolder, path: '/admin/knowledge-bases' },
-  { title: '导入文档', icon: IconFile, path: '/admin/knowledge-bases' },
+  { title: '文件管理', icon: IconFile, path: '/admin/files' },
   { title: 'Agent 管理', icon: IconRobot, path: '/admin/agents' },
   { title: '统计面板', icon: IconBarChart, path: '/admin/statistics' },
 ])
@@ -33,12 +33,33 @@ function navigateTo(path: string) {
 
 <template>
   <div class="dashboard">
+    <header class="akb-section-heading">
+      <span class="akb-kicker">COMMAND / OVERVIEW</span><h2>运行概览</h2><p>查看资料、智能体与问答活动。</p>
+    </header>
+    <section
+      class="akb-operator-roster"
+      aria-label="战术档案主题角色"
+    >
+      <div class="akb-operator-card narantouya">
+        <span>01 / FIELD</span><strong>娜仁图亚</strong>
+      </div>
+      <div class="akb-operator-card pramanix">
+        <span>02 / SIGNAL</span><strong>圣聆初雪</strong>
+      </div>
+      <div class="akb-operator-card amiya">
+        <span>03 / ARCHIVE</span><strong>阿米娅</strong>
+      </div>
+    </section>
     <!-- 统计卡片 -->
     <a-row
       :gutter="20"
       class="stat-row"
     >
-      <a-col :span="6">
+      <a-col
+        :xs="24"
+        :sm="12"
+        :lg="6"
+      >
         <StatCard
           title="知识条目总数"
           :value="overview?.total_items ?? 0"
@@ -47,7 +68,11 @@ function navigateTo(path: string) {
           :loading="overviewLoading"
         />
       </a-col>
-      <a-col :span="6">
+      <a-col
+        :xs="24"
+        :sm="12"
+        :lg="6"
+      >
         <StatCard
           title="可用条目数"
           :value="overview?.available_items ?? 0"
@@ -55,7 +80,11 @@ function navigateTo(path: string) {
           :loading="overviewLoading"
         />
       </a-col>
-      <a-col :span="6">
+      <a-col
+        :xs="24"
+        :sm="12"
+        :lg="6"
+      >
         <StatCard
           title="Agent 总数"
           :value="overview?.total_agents ?? 0"
@@ -63,7 +92,11 @@ function navigateTo(path: string) {
           :loading="overviewLoading"
         />
       </a-col>
-      <a-col :span="6">
+      <a-col
+        :xs="24"
+        :sm="12"
+        :lg="6"
+      >
         <StatCard
           title="今日问答次数"
           :value="overview?.today_chats ?? 0"
@@ -79,7 +112,10 @@ function navigateTo(path: string) {
       :gutter="20"
       class="bottom-row"
     >
-      <a-col :span="8">
+      <a-col
+        :xs="24"
+        :lg="8"
+      >
         <a-card class="quick-links-card">
           <template #header>
             <span class="card-header-title">快捷入口</span>
@@ -100,7 +136,10 @@ function navigateTo(path: string) {
         </a-card>
       </a-col>
 
-      <a-col :span="16">
+      <a-col
+        :xs="24"
+        :lg="16"
+      >
         <a-card class="timeline-card">
           <template #header>
             <span class="card-header-title">最近动态</span>

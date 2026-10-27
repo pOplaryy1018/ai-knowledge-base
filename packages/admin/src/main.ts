@@ -8,6 +8,7 @@ import ArcoVue from '@arco-design/web-vue'
 import '@arco-design/web-vue/dist/arco.css'
 import './styles/global.css'
 import './styles/transition.css'
+import '../../shared/src/styles/tactical.css'
 
 const app = createApp(App)
 app.use(ArcoVue)

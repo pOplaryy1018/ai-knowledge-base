@@ -133,10 +133,13 @@ onUnmounted(() => {
 </script>
 <template>
   <a-space
+    class="akb-content-page"
     direction="vertical"
     fill
   >
-    <h2>个人资料问答</h2>
+    <header class="akb-section-heading">
+      <span class="akb-kicker">INTELLIGENCE / SCOPED RAG</span><h2>个人资料问答</h2><p>从已发布资料中寻找答案，并核对每条引用。</p>
+    </header>
     <a-alert>仅查询所选已发布来源。改变来源会开启新对话并清空当前记录。</a-alert><a-alert
       v-if="error"
       type="error"

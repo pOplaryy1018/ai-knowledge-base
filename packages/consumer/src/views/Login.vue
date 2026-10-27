@@ -48,102 +48,78 @@ async function handleLogin() {
 </script>
 
 <template>
-  <div class="login-wrapper">
-    <div class="login-card">
-      <h1 class="login-title">
-        AI 知识库问答
-      </h1>
-      <p class="login-subtitle">
-        登录后即可向 AI 助手提问
-      </p>
-
-      <a-form
-        ref="formRef"
-        :model="form"
-        :rules="rules"
-        layout="vertical"
-        @keyup.enter="handleLogin"
-      >
-        <a-form-item
-          label="用户名"
-          field="username"
-        >
-          <a-input
-            v-model="form.username"
-            placeholder="请输入用户名"
-            size="large"
-          />
-        </a-form-item>
-
-        <a-form-item
-          label="密码"
-          field="password"
-        >
-          <a-input
-            v-model="form.password"
-            type="password"
-            placeholder="请输入密码"
-            size="large"
-          />
-        </a-form-item>
-
-        <a-form-item>
-          <a-button
-            type="primary"
-            :loading="loading"
-            size="large"
-            long
-            @click="handleLogin"
-          >
-            登 录
-          </a-button>
-        </a-form-item>
-
-        <div class="login-footer">
-          没有账户？<router-link to="/register">
-            立即注册
-          </router-link>
+  <div class="akb-auth">
+    <div class="akb-auth-shell">
+      <section class="akb-auth-story">
+        <div class="akb-auth-brand">
+          AKB / TACTICAL ARCHIVE
         </div>
-      </a-form>
+        <div class="akb-auth-copy">
+          <small>OPERATION / PERSONAL KNOWLEDGE</small>
+          <h1>每个答案，<br>都有来处。</h1>
+          <p>追踪资料版本，定位原文证据。和韬韬一起，把知识整理得更清楚。</p>
+        </div>
+        <div
+          class="akb-auth-portrait"
+          aria-hidden="true"
+        />
+      </section>
+      <section class="akb-auth-panel">
+        <div class="akb-auth-code">
+          01 / USER ACCESS
+        </div>
+        <h2>重新连接</h2>
+        <p>进入你的私人知识空间</p>
+
+        <a-form
+          ref="formRef"
+          :model="form"
+          :rules="rules"
+          layout="vertical"
+          @keyup.enter="handleLogin"
+        >
+          <a-form-item
+            label="用户名"
+            field="username"
+          >
+            <a-input
+              v-model="form.username"
+              placeholder="请输入用户名"
+              size="large"
+            />
+          </a-form-item>
+
+          <a-form-item
+            label="密码"
+            field="password"
+          >
+            <a-input
+              v-model="form.password"
+              type="password"
+              placeholder="请输入密码"
+              size="large"
+            />
+          </a-form-item>
+
+          <a-form-item>
+            <a-button
+              type="primary"
+              :loading="loading"
+              size="large"
+              long
+              @click="handleLogin"
+            >
+              登 录
+            </a-button>
+          </a-form-item>
+
+          <div class="akb-auth-footer">
+            没有账户？<router-link to="/register">
+              立即注册
+            </router-link>
+          </div>
+        </a-form>
+      </section>
     </div>
   </div>
 </template>
-
-<style scoped>
-.login-wrapper {
-  height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #122E8A, #0F2570);
-}
-.login-card {
-  width: 420px;
-  padding: 48px 40px;
-  background: var(--color-bg-card);
-  border-radius: 12px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12);
-}
-.login-title {
-  text-align: center;
-  font-size: 24px;
-  color: var(--color-primary);
-  margin: 0 0 8px;
-  font-weight: 600;
-}
-.login-subtitle {
-  text-align: center;
-  font-size: 14px;
-  color: var(--color-text-tertiary);
-  margin: 0 0 32px;
-}
-.login-footer {
-  text-align: center;
-  font-size: 14px;
-  color: var(--color-text-tertiary);
-}
-.login-footer a {
-  color: var(--color-primary);
-  text-decoration: none;
-}
-</style>

@@ -63,6 +63,9 @@ onMounted(() => fetchFiles())
 
 <template>
   <div class="file-mgmt">
+    <header class="akb-section-heading">
+      <span class="akb-kicker">COMMAND / FILES</span><h2>文件管理</h2><p>追踪导入状态、文件来源与处理结果。</p>
+    </header>
     <div class="file-toolbar">
       <a-input
         v-model="search"

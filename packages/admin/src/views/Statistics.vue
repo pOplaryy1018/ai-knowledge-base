@@ -18,8 +18,7 @@ import {
   useItemsByType,
   useItemsTrend,
   useChatTrend,
-  useTopItems,
-  useTagsWordcloud} from '@/composables/useStatisticsQueries'
+  useTopItems} from '@/composables/useStatisticsQueries'
 
 // 注册 ECharts 组件
 use([CanvasRenderer, LineChart, BarChart, PieChart, GridComponent, TooltipComponent, LegendComponent])
@@ -43,47 +42,51 @@ const { data: itemsByType, isLoading: typeLoading } = useItemsByType(selectedKbI
 const { data: itemsTrend, isLoading: trendLoading } = useItemsTrend(days, selectedKbId)
 const { data: chatTrend, isLoading: chatLoading } = useChatTrend(days)
 const { data: topItems, isLoading: topLoading } = useTopItems(20, selectedKbId)
-// 词云组件待实现，查询结果暂未绑定到视图
-useTagsWordcloud(selectedKbId)
 
 // ── 条目趋势折线图 ──
 const itemsTrendOption = computed(() => ({
-  tooltip: { trigger: 'axis' as const },
+  backgroundColor: 'transparent',
+  tooltip: { trigger: 'axis' as const, backgroundColor: '#231c2c', borderColor: '#705f80', textStyle: { color: '#f3f3f5' } },
   grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
   xAxis: {
     type: 'category' as const,
+    axisLabel: { color: '#bdc0c8' }, axisLine: { lineStyle: { color: '#50465a' } },
     data: itemsTrend.value?.map((p) => p.date) ?? []},
-  yAxis: { type: 'value' as const },
+  yAxis: { type: 'value' as const, axisLabel: { color: '#bdc0c8' }, splitLine: { lineStyle: { color: '#3e3549' } } },
   series: [
     {
       name: '新增条目',
       type: 'line',
       data: itemsTrend.value?.map((p) => p.count) ?? [],
       smooth: true,
-      lineStyle: { color: '#409eff' },
-      areaStyle: { color: 'rgba(64,158,255,0.1)' }},
+      lineStyle: { color: '#c5a8ee' },
+      areaStyle: { color: 'rgba(197,168,238,0.13)' }},
   ]}))
 
 // ── 问答趋势柱状图 ──
 const chatTrendOption = computed(() => ({
-  tooltip: { trigger: 'axis' as const },
+  backgroundColor: 'transparent',
+  tooltip: { trigger: 'axis' as const, backgroundColor: '#231c2c', borderColor: '#705f80', textStyle: { color: '#f3f3f5' } },
   grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
   xAxis: {
     type: 'category' as const,
+    axisLabel: { color: '#bdc0c8' }, axisLine: { lineStyle: { color: '#50465a' } },
     data: chatTrend.value?.map((p) => p.date) ?? []},
-  yAxis: { type: 'value' as const },
+  yAxis: { type: 'value' as const, axisLabel: { color: '#bdc0c8' }, splitLine: { lineStyle: { color: '#3e3549' } } },
   series: [
     {
       name: '问答次数',
       type: 'bar',
       data: chatTrend.value?.map((p) => p.count) ?? [],
-      itemStyle: { color: '#67c23a', borderRadius: [4, 4, 0, 0] }},
+      itemStyle: { color: '#eeb275', borderRadius: [2, 2, 0, 0] }},
   ]}))
 
 // ── 类型分布饼图 ──
 const typePieOption = computed(() => ({
-  tooltip: { trigger: 'item' as const },
-  legend: { bottom: '0%' },
+  backgroundColor: 'transparent',
+  color: ['#c5a8ee', '#eeb275', '#9982be', '#bdc0c8', '#e698aa'],
+  tooltip: { trigger: 'item' as const, backgroundColor: '#231c2c', borderColor: '#705f80', textStyle: { color: '#f3f3f5' } },
+  legend: { bottom: '0%', textStyle: { color: '#bdc0c8' } },
   series: [
     {
       name: '类型分布',
@@ -110,6 +113,9 @@ function handlePresetChange(val: number | string | boolean | undefined) {
 
 <template>
   <div class="statistics-page">
+    <header class="akb-section-heading">
+      <span class="akb-kicker">COMMAND / METRICS</span><h2>统计分析</h2><p>查看资料与问答活动的运行趋势。</p>
+    </header>
     <!-- 顶部筛选栏 -->
     <a-card class="filter-card">
       <div class="filter-bar">

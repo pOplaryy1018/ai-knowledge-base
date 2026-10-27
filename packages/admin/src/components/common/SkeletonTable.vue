@@ -31,5 +31,5 @@ withDefaults(
 
 <style scoped>
 .skeleton-table { padding: 16px 0; }
-.skeleton-row { display: flex; padding: 12px 0; border-bottom: 1px solid #ebeef5; }
+.skeleton-row { display: flex; padding: 12px 0; border-bottom: 1px solid var(--akb-line); }
 </style>

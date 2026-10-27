@@ -131,8 +131,8 @@ const trendText = computed(() => {
   margin-left: 16px;
   width: 56px;
   height: 56px;
-  border-radius: 12px;
-  background: rgba(64, 158, 255, 0.08);
+  border-radius: 2px;
+  background: #352742;
   display: flex;
   align-items: center;
   justify-content: center;

@@ -343,17 +343,20 @@ onUnmounted(() => {
 </script>
 <template>
   <a-space
+    class="akb-content-page"
     direction="vertical"
     fill
   >
-    <h2>资料来源</h2>
+    <header class="akb-section-heading">
+      <span class="akb-kicker">ARCHIVE / SOURCES</span><h2>资料来源</h2><p>管理资料同步、发布版本与原件。</p>
+    </header>
     <a-alert
       v-if="error"
       type="error"
     >
       {{ error }}
     </a-alert>
-    <a-space>
+    <a-space class="akb-source-compose">
       <a-input
         v-model="name"
         placeholder="来源名称"
@@ -470,7 +473,10 @@ onUnmounted(() => {
         >
           最近同步检测到未提交修改；采集只包含已提交内容。
         </a-alert>
-        <a-space v-if="selected.kind === 'git_local' || selected.kind === 'git_public'">
+        <a-space
+          v-if="selected.kind === 'git_local' || selected.kind === 'git_public'"
+          class="akb-source-actions"
+        >
           <a-input
             v-model="scopePaths"
             placeholder="调整采集范围，逗号分隔；留空采集整个仓库"
@@ -483,7 +489,7 @@ onUnmounted(() => {
             保存采集范围
           </a-button>
         </a-space>
-        <a-space>
+        <a-space class="akb-source-actions">
           <input
             v-if="selected.kind === 'document'"
             type="file"

@@ -7,6 +7,7 @@ import router from './router'
 import ArcoVue from '@arco-design/web-vue'
 import '@arco-design/web-vue/dist/arco.css'
 import './styles/global.css'
+import '../../shared/src/styles/tactical.css'
 
 const app = createApp(App)
 app.use(ArcoVue)

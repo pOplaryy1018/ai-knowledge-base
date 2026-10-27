@@ -166,7 +166,7 @@ watch(() => route.query.agent_id, async (value, _previous, onCleanup) => {
 <template>
   <div class="chat-fullpage">
     <header class="chat-topbar">
-      <h3>{{ store.agent?.name || 'AI 问答' }}</h3>
+      <div><span class="akb-kicker">INTELLIGENCE / AGENT</span><h3>{{ store.agent?.name || 'AI 问答' }}</h3></div>
       <span
         v-if="store.isStreaming"
         class="streaming-indicator"

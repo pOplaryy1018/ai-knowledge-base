@@ -26,6 +26,7 @@ function handleLogout() {
         :size="20"
         @click="appStore.toggleSidebar"
       />
+      <span class="top-caption">ADMIN SPACE / CONTROL</span>
     </div>
 
     <div class="top-navbar-right">
@@ -85,8 +86,10 @@ function handleLogout() {
 }
 
 .user-info:hover {
-  background: #f0f2f5;
+  background: #30263a;
 }
+.top-caption { color: var(--akb-text-secondary); font: 10px Consolas, monospace; letter-spacing: .12em; margin-left: 14px; }
+@media (max-width: 640px) { .top-caption { display: none; } }
 
 .user-name {
   font-size: 14px;

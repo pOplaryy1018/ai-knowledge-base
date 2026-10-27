@@ -92,10 +92,13 @@ onUnmounted(() => scope.dispose())
 </script>
 <template>
   <a-space
+    class="akb-content-page"
     direction="vertical"
     fill
   >
-    <h2>答案复核</h2>
+    <header class="akb-section-heading">
+      <span class="akb-kicker">ARCHIVE / REVIEW</span><h2>答案复核</h2><p>核对新旧证据，再记录保留或采纳决定。</p>
+    </header>
     <a-alert
       v-if="error"
       type="error"
@@ -110,7 +113,9 @@ onUnmounted(() => scope.dispose())
           {{ review.answer.content }}
         </p>
       </a-card>
-      <h3>当前实时证据比对</h3>
+      <h3 class="akb-subheading">
+        当前实时证据比对
+      </h3>
       <a-card
         v-for="(evidence, evidenceIndex) in review.answer.evidence"
         :key="evidence.evidence_id"

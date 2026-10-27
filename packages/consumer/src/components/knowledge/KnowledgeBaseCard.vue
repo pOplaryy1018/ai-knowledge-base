@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 知识库卡片 — 仿飞书云文档风格
+ * 知识库卡片 — 战术档案封面
  */
 import { computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
@@ -18,14 +18,14 @@ const router = useRouter()
 
 // ── 预设渐变色（根据 ID 字符码取模） ──
 const GRADIENTS: [string, string][] = [
-  ['#122E8A', '#4B3F72'],
-  ['#122E8A', '#1A5C8A'],
-  ['#122E8A', '#8A4B12'],
-  ['#122E8A', '#2D5AA0'],
-  ['#0F2570', '#6B3A6B'],
-  ['#122E8A', '#3A6B8A'],
-  ['#1A3DAA', '#5C4B1A'],
-  ['#122E8A', '#7A4B5C'],
+  ['#372849', '#17121f'],
+  ['#473055', '#1a1524'],
+  ['#563c52', '#1a1424'],
+  ['#312b4d', '#15111e'],
+  ['#45334d', '#1a1523'],
+  ['#4d3a57', '#17121f'],
+  ['#463c50', '#1c1727'],
+  ['#503c4e', '#1b1523'],
 ]
 
 const gradientStyle = computed(() => {
@@ -127,7 +127,8 @@ async function handleSelect(value: string | number | Record<string, any> | undef
 <style scoped>
 .kb-card {
   background: var(--color-bg-card);
-  border-radius: 12px;
+  border: 1px solid var(--akb-line);
+  border-radius: 2px;
   cursor: pointer;
   box-shadow: var(--shadow-card);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -139,13 +140,14 @@ async function handleSelect(value: string | number | Record<string, any> | undef
 
 .kb-card-cover {
   position: relative;
-  aspect-ratio: 3 / 2;
+  aspect-ratio: 2 / 1;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: 12px 12px 0 0;
+  border-radius: 1px 1px 0 0;
 }
+.kb-card-cover::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 38px, #e2d3f00c 39px 40px); pointer-events: none; }
 .kb-card-cover-icon {
   color: rgba(255, 255, 255, 0.85);
   display: flex;
@@ -156,20 +158,20 @@ async function handleSelect(value: string | number | Record<string, any> | undef
   top: 8px;
   right: 8px;
   z-index: 2;
-  opacity: 0;
+  opacity: 1;
   transition: opacity 0.15s ease;
 }
 .kb-card:hover .kb-card-more {
   opacity: 1;
 }
 .kb-card-more-btn {
-  background: rgba(18, 46, 138, 0.2) !important;
+  background: #1b1424d9 !important;
   color: #fff !important;
-  border-radius: 6px;
+  border-radius: 2px;
   backdrop-filter: blur(4px);
 }
 .kb-card-more-btn:hover {
-  background: rgba(18, 46, 138, 0.35) !important;
+  background: #3c2b4c !important;
 }
 
 .kb-card-body {

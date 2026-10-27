@@ -198,7 +198,9 @@ async function handleDialogSubmit(data: KnowledgeBaseCreate | KnowledgeBaseUpdat
 
 <style scoped>
 .list-page {
-  background: #fff;
+  background: var(--akb-surface);
+  border: 1px solid var(--akb-line);
+  border-top: 3px solid var(--akb-primary);
   border-radius: var(--akb-card-radius);
   padding: 20px;
 }
@@ -212,7 +214,8 @@ async function handleDialogSubmit(data: KnowledgeBaseCreate | KnowledgeBaseUpdat
 
 .list-title {
   margin: 0;
-  font-size: 18px;
+  font-size: 28px;
+  letter-spacing: -.045em;
   font-weight: 600;
   color: var(--akb-text);
 }

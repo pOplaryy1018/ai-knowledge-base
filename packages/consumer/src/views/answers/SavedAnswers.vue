@@ -33,16 +33,19 @@ onUnmounted(() => controller.abort())
 </script>
 <template>
   <a-space
+    class="akb-content-page"
     direction="vertical"
     fill
   >
-    <h2>已保存答案</h2>
+    <header class="akb-section-heading">
+      <span class="akb-kicker">ARCHIVE / ANSWERS</span><h2>已保存答案</h2><p>保存有原文依据的回答，跟踪资料变化与复核决定。</p>
+    </header>
     <a-alert
       v-if="error"
       type="error"
     >
       {{ error }}
-    </a-alert><a-list>
+    </a-alert><a-spin v-if="busy" /><a-list>
       <a-list-item
         v-for="answer in answers"
         :key="answer.id"
@@ -54,7 +57,9 @@ onUnmounted(() => controller.abort())
         </a-space>
       </a-list-item>
     </a-list>
-    <h3>复核记录</h3>
+    <h3 class="akb-subheading">
+      复核记录
+    </h3>
     <a-list>
       <a-list-item
         v-for="review in reviews"

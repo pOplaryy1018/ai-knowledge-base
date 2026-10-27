@@ -3,8 +3,13 @@ import { useAppStore } from '@/stores/app'
 import TopNavbar from '@/components/layout/TopNavbar.vue'
 import SidebarMenu from '@/components/layout/SidebarMenu.vue'
 import BreadcrumbNav from '@/components/layout/BreadcrumbNav.vue'
+import { useUserStore } from '@/stores/user'
+import { listSources, downloadCitationOriginal } from '@/api/sources'
+import { scopedChatSSE } from '@/api/scoped-chat'
+import TaotaoAssistant from '../../../shared/src/components/TaotaoAssistant.vue'
 
 const appStore = useAppStore()
+const userStore = useUserStore()
 </script>
 
 <template>
@@ -39,17 +44,26 @@ const appStore = useAppStore()
         </router-view>
       </a-layout-content>
     </a-layout>
+    <TaotaoAssistant
+      :generation="userStore.generation"
+      :get-sources="listSources"
+      :ask="scopedChatSSE"
+      :open-original="downloadCitationOriginal"
+      sources-path="/admin/knowledge-bases"
+      sources-label="前往知识库管理"
+    />
   </a-layout>
 </template>
 
 <style scoped>
 .layout-container {
   height: 100vh;
+  background: var(--akb-bg);
 }
 
 .layout-header {
   background: var(--akb-header-bg);
-  border-bottom: 1px solid #e6e6e6;
+  border-bottom: 1px solid var(--akb-line);
   padding: 0;
   flex-shrink: 0;
 }
@@ -61,17 +75,25 @@ const appStore = useAppStore()
 
 .layout-aside {
   background-color: var(--akb-sidebar-bg);
+  border-right: 1px solid var(--akb-line);
   transition: width 0.3s;
   overflow: hidden;
 }
 
 .layout-main {
   background-color: var(--akb-bg);
-  padding: 20px;
+  background-image: linear-gradient(#a28ab009 1px, transparent 1px), linear-gradient(90deg, #a28ab009 1px, transparent 1px);
+  background-size: 40px 40px;
+  padding: 28px;
   overflow-y: auto;
 }
 
 .layout-breadcrumb {
-  margin-bottom: 16px;
+  margin-bottom: 22px;
+}
+@media (max-width: 760px) {
+  .layout-body { flex-direction: column; }
+  .layout-aside { width: 100% !important; flex: none !important; height: 112px; border-right: 0; border-bottom: 1px solid var(--akb-line); }
+  .layout-main { padding: 16px 12px 76px; }
 }
 </style>

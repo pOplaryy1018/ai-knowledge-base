@@ -48,89 +48,72 @@ async function handleLogin() {
 </script>
 
 <template>
-  <div class="login-wrapper">
-    <div class="login-card">
-      <h1 class="login-title">
-        AI 知识库管理平台
-      </h1>
-      <p class="login-subtitle">
-        请使用管理员账户登录
-      </p>
+  <div class="akb-auth">
+    <div class="akb-auth-shell">
+      <section class="akb-auth-story">
+        <div class="akb-auth-brand">
+          AKB / TACTICAL ARCHIVE
+        </div>
+        <div class="akb-auth-copy">
+          <small>OPERATION / SYSTEM CONTROL</small>
+          <h1>让知识，<br>有序可循。</h1>
+          <p>查看知识库、Agent 与文件状态，管理每一条可追溯的工作流程。</p>
+        </div>
+        <div
+          class="akb-auth-portrait"
+          aria-hidden="true"
+        />
+      </section>
+      <section class="akb-auth-panel">
+        <div class="akb-auth-code">
+          02 / ADMIN ACCESS
+        </div>
+        <h2>管理入口</h2>
+        <p>请使用管理员账户登录</p>
 
-      <a-form
-        ref="formRef"
-        :model="form"
-        :rules="rules"
-        layout="vertical"
-        @keyup.enter="handleLogin"
-      >
-        <a-form-item
-          label="用户名"
-          field="username"
+        <a-form
+          ref="formRef"
+          :model="form"
+          :rules="rules"
+          layout="vertical"
+          @keyup.enter="handleLogin"
         >
-          <a-input
-            v-model="form.username"
-            placeholder="请输入用户名"
-            size="large"
-          />
-        </a-form-item>
-
-        <a-form-item
-          label="密码"
-          field="password"
-        >
-          <a-input
-            v-model="form.password"
-            type="password"
-            placeholder="请输入密码"
-            size="large"
-          />
-        </a-form-item>
-
-        <a-form-item>
-          <a-button
-            type="primary"
-            :loading="loading"
-            size="large"
-            class="login-btn"
-            @click="handleLogin"
+          <a-form-item
+            label="用户名"
+            field="username"
           >
-            登 录
-          </a-button>
-        </a-form-item>
-      </a-form>
+            <a-input
+              v-model="form.username"
+              placeholder="请输入用户名"
+              size="large"
+            />
+          </a-form-item>
+
+          <a-form-item
+            label="密码"
+            field="password"
+          >
+            <a-input
+              v-model="form.password"
+              type="password"
+              placeholder="请输入密码"
+              size="large"
+            />
+          </a-form-item>
+
+          <a-form-item>
+            <a-button
+              type="primary"
+              :loading="loading"
+              size="large"
+              class="login-btn"
+              @click="handleLogin"
+            >
+              登 录
+            </a-button>
+          </a-form-item>
+        </a-form>
+      </section>
     </div>
   </div>
 </template>
-
-<style scoped>
-.login-wrapper {
-  height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-.login-card {
-  width: 420px;
-  padding: 48px 40px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12);
-}
-.login-title {
-  text-align: center;
-  font-size: 22px;
-  color: #303133;
-  margin: 0 0 8px;
-}
-.login-subtitle {
-  text-align: center;
-  font-size: 14px;
-  color: #909399;
-  margin: 0 0 32px;
-}
-.login-btn {
-  width: 100%;
-}
-</style>

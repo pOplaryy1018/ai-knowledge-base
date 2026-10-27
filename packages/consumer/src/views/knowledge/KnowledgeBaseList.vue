@@ -48,9 +48,9 @@ async function handleDialogSubmit(data: KnowledgeBaseCreate | KnowledgeBaseUpdat
 <template>
   <div class="list-page">
     <div class="list-header">
-      <h2 class="list-title">
-        全部知识库
-      </h2>
+      <div class="akb-section-heading">
+        <span class="akb-kicker">ARCHIVE / LIBRARY</span><h2>全部知识库</h2><p>进入资料档案，管理内容和版本。</p>
+      </div>
       <a-button
         type="primary"
         @click="openCreate"
@@ -61,6 +61,21 @@ async function handleDialogSubmit(data: KnowledgeBaseCreate | KnowledgeBaseUpdat
         新建知识库
       </a-button>
     </div>
+
+    <section
+      class="akb-operator-roster"
+      aria-label="战术档案主题角色"
+    >
+      <div class="akb-operator-card narantouya">
+        <span>01 / FIELD</span><strong>娜仁图亚</strong>
+      </div>
+      <div class="akb-operator-card pramanix">
+        <span>02 / SIGNAL</span><strong>圣聆初雪</strong>
+      </div>
+      <div class="akb-operator-card amiya">
+        <span>03 / ARCHIVE</span><strong>阿米娅</strong>
+      </div>
+    </section>
 
     <div class="list-toolbar">
       <a-input

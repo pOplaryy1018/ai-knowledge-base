@@ -108,10 +108,13 @@ onUnmounted(() => scope.dispose())
 </script>
 <template>
   <a-space
+    class="akb-content-page"
     direction="vertical"
     fill
   >
-    <h2>{{ answer?.question || '答案详情' }}</h2>
+    <header class="akb-section-heading">
+      <span class="akb-kicker">ARCHIVE / EVIDENCE</span><h2>{{ answer?.question || '答案详情' }}</h2><p>查看引用版本、当前原文与人工采纳记录。</p>
+    </header>
     <a-alert
       v-if="error"
       type="error"
@@ -133,7 +136,9 @@ onUnmounted(() => scope.dispose())
         </p>
         <p>本答案依据 {{ Object.keys(answer.source_versions).length }} 个资料版本。</p>
       </a-card>
-      <h3>引用证据 · 当前比对</h3>
+      <h3 class="akb-subheading">
+        引用证据 · 当前比对
+      </h3>
       <a-card
         v-for="(evidence, evidenceIndex) in answer.evidence"
         :key="evidence.evidence_id"
