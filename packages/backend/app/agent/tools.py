@@ -112,6 +112,13 @@ class ToolRegistry:
             raise ValueError("invalid tool registration")
         self._tools[name] = (schema, handler)
 
+    def definitions(self) -> list[dict[str, Any]]:
+        """Return provider-compatible schemas without exposing handler state."""
+        return [
+            {"type": "function", "function": {"name": name, "parameters": schema.model_json_schema()}}
+            for name, (schema, _) in self._tools.items()
+        ]
+
     async def invoke(self, context: RuntimeContext, request: ToolRequest) -> ToolResult:
         call_id = request.call_id if isinstance(request.call_id, str) else ""
         try:
