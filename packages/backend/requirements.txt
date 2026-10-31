@@ -55,6 +55,7 @@ python-multipart>=0.0.20
 
 # ── LLM 调用 ──
 openai>=1.58.0
+mcp==2.3.0
 
 # ── 中文分词 ──
 jieba>=0.42.1
