@@ -1,4 +1,5 @@
 from app.models.agent import Agent, Conversation, Message
+from app.models.agent_task import AgentTask
 from app.models.answer import AnswerEvidence, AnswerRevision, ImpactReview, SavedAnswer
 from app.models.asset_cleanup import AssetCleanup
 from app.models.base import Base
@@ -16,4 +17,4 @@ from app.models.source_publication import SourcePublication
 from app.models.user import User
 from app.models.wiki import WikiPage, WikiRevision
 
-__all__ = ["WikiPage", "WikiRevision", "SourcePublication", "Base", "User", "KnowledgeBase", "KnowledgeFile", "KnowledgeItem", "Agent", "Conversation", "Message", "ImportTask", "Source", "SourceRevision", "SourceDocument", "SourceSyncTask", "SourceChangeEvent", "SavedAnswer", "AnswerRevision", "AnswerEvidence", "ImpactReview", "AssetCleanup", "GraphBuildTask", "GraphCleanup"]
+__all__ = ["WikiPage", "WikiRevision", "SourcePublication", "Base", "User", "KnowledgeBase", "KnowledgeFile", "KnowledgeItem", "Agent", "AgentTask", "Conversation", "Message", "ImportTask", "Source", "SourceRevision", "SourceDocument", "SourceSyncTask", "SourceChangeEvent", "SavedAnswer", "AnswerRevision", "AnswerEvidence", "ImpactReview", "AssetCleanup", "GraphBuildTask", "GraphCleanup"]
