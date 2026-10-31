@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from uuid import UUID
 
-from sqlalchemy import Integer, String, and_, func, or_, select
+from sqlalchemy import Integer, String, and_, func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -15,6 +15,21 @@ from app.models.source import Source, SourceDocument, SourceRevision
 @dataclass(frozen=True)
 class DocumentPage:
     document_ids: list[str]
+    next_cursor: str | None
+
+
+@dataclass(frozen=True)
+class SourceSummary:
+    source_id: str
+    revision_id: str
+    knowledge_base_id: str | None
+    name: str
+    kind: str
+
+
+@dataclass(frozen=True)
+class SourcePage:
+    items: list[SourceSummary]
     next_cursor: str | None
 
 
@@ -66,6 +81,34 @@ def _visible(owner_id: str, source_id: str, revision_id: str) -> tuple[ColumnEle
     return (Source.id == source_id, Source.user_id == owner_id, Source.archived_at.is_(None),
             Source.deleted_at.is_(None), SourceRevision.id == revision_id,
             SourceRevision.source_id == Source.id, SourceRevision.state == "ready", _knowledge_access(owner_id))
+
+
+async def list_sources(
+    session: AsyncSession, context: RuntimeContext, *, limit: int = 50, after: str | None = None,
+) -> SourcePage:
+    if type(limit) is not int or not 1 <= limit <= 50:
+        raise ValueError("invalid page limit")
+    owner_id = _uuid(context.owner_id)
+    if after is not None:
+        after = _uuid(after)
+        if after not in context.source_versions:
+            raise LookupError("source unavailable")
+    ids = sorted(source_id for source_id in context.source_versions if after is None or source_id > after)
+    items: list[SourceSummary] = []
+    # Bound each SQL query even when the task snapshot contains many sources.
+    for start in range(0, len(ids), 50):
+        pairs = [(_uuid(source_id), _uuid(context.source_versions[source_id])) for source_id in ids[start:start + 50]]
+        query = (select(Source.id, SourceRevision.id, Source.knowledge_base_id, Source.name, Source.kind)
+                 .join(SourceRevision, SourceRevision.source_id == Source.id)
+                 .where(tuple_(Source.id, SourceRevision.id).in_(pairs), Source.user_id == owner_id,
+                        Source.archived_at.is_(None), Source.deleted_at.is_(None), SourceRevision.state == "ready",
+                        _knowledge_access(owner_id))
+                 .order_by(Source.id))
+        rows = (await session.execute(query)).all()
+        items.extend(SourceSummary(*row) for row in rows)
+        if len(items) > limit:
+            break
+    return SourcePage(items[:limit], items[limit - 1].source_id if len(items) > limit else None)
 
 
 async def list_documents(
